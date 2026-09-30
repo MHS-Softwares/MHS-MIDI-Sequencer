@@ -1858,8 +1858,16 @@ class DrumSetupDialog(wx.Dialog):
                         self.parent.output.send(mido.Message('control_change', channel=ch, control=0, value=b_atual // 128))
                         self.parent.output.send(mido.Message('control_change', channel=ch, control=32, value=b_atual % 128))
                         self.parent.output.send(mido.Message('program_change', channel=ch, program=p_atual))
+                        # Mesmo bug achado no Style Creator: resselecionar o
+                        # Banco/Patch (pra tocar o kit doador e pra voltar)
+                        # RESETA a afinação por nota no teclado real - sem
+                        # isso, qualquer peça já CONFIRMADA (Alt+Aplicar)
+                        # em OUTRA nota deste canal "se desfazia" sozinha
+                        # no teclado só de mexer nos controles de uma peça
+                        # diferente, mesmo sem clicar Aplicar pra ela.
+                        self.reapply_preview_state()
                     except: pass
-                    
+
             self.preview_timer = threading.Timer(0.4, restaurar_e_parar)
             self.preview_timer.start()
         except: pass

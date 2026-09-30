@@ -31,7 +31,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.1"
+VERSAO_APP = "4.2"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -62,6 +62,20 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.2": (
+        "- Corrigido um bug no Drum Setup, aba \"Montagem de Kit\": só de "
+        "ajustar o Banco/Patch/Peça Doadora de UMA peça (mesmo sem clicar "
+        "\"Aplicar Mapeamento\") já podia desfazer, no teclado real, a "
+        "afinação de QUALQUER OUTRA peça já confirmada antes nesse mesmo "
+        "canal (ex.: montar a Caixa, aplicar, e só de mexer nos controles "
+        "do Bumbo em seguida, a Caixa \"voltava\" pro kit padrão). Causa: "
+        "a pré-audição do kit doador reseleciona o Banco/Patch do canal "
+        "duas vezes (pra tocar e pra voltar), e isso reseta a afinação "
+        "por nota inteira no teclado real - sem reaplicar depois o que já "
+        "tinha sido confirmado. Os dados nunca se perdiam (por isso "
+        "reabrir a tela sempre mostrava tudo certo), só o SOM ao vivo "
+        "ficava errado até fechar e reabrir a tela de novo."
+    ),
     "4.1": (
         "- Novo: aba \"Atualizações\" em Preferências (Ctrl+P) - caixa de "
         "marcação \"Verificar atualizações automaticamente ao iniciar o "
