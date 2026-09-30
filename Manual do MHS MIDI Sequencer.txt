@@ -1,0 +1,921 @@
+# Manual do MHS MIDI Sequencer
+
+Manual completo de uso, escrito pensando em acessibilidade para usuários
+cegos ou com baixa visão que usam leitor de tela (NVDA).
+
+---
+
+# 1. Introdução
+
+O MHS MIDI Sequencer é um editor de arquivos MIDI (.mid) feito para
+funcionar 100% por teclado, com retorno falado (voz) em praticamente toda
+ação. Ele foi pensado desde o início para músicos cegos: nenhuma função
+depende de enxergar a tela, de mouse, ou de cores. Tudo o que aparece
+visualmente também é dito em voz alta.
+
+Com ele você pode: gravar e editar notas, controlar volume/pan/efeitos de
+cada um dos 16 canais MIDI, afinar peças de bateria nota a nota, montar e
+editar efeitos de DSP (Reverb, Chorus, Variation, Inserção), criar timbres
+próprios (Voice Creator), quantizar, humanizar, aplicar arpejador/delay/
+harpa, editar SysEx manualmente, sincronizar um áudio guia com o projeto, e
+muito mais - tudo isso sobre um arquivo .mid padrão, que funciona em
+qualquer teclado XG ou GM/GS, incluindo o Yamaha PSR-SX600.
+
+---
+
+# 2. Instalação
+
+## 2.1 O que você precisa
+
+- Windows (o programa foi feito e testado em Windows).
+- Um leitor de tela rodando - o mais recomendado é o **NVDA** (gratuito).
+  O programa detecta sozinho qualquer leitor de tela compatível
+  (`accessible_output2`) já em execução; não precisa configurar nada à
+  parte, só deixar o NVDA ligado antes de abrir o programa.
+- Uma porta de saída MIDI: pode ser um teclado real ligado por USB/MIDI
+  (como o Yamaha PSR-SX600) ou um sintetizador virtual instalado no
+  Windows.
+
+## 2.2 Instalando com o instalador
+
+Se você recebeu um arquivo chamado algo como
+`Instalador_MHS MIDI Sequencer.exe`:
+
+1. Dê duplo clique nele. O Windows vai pedir permissão de administrador
+   (UAC) - aceite; é necessária porque o programa se instala em Arquivos
+   de Programas e registra uma entrada de desinstalação.
+2. Escolha a pasta de destino (ou deixe a sugerida), marque se quer atalho
+   na Área de Trabalho e no Menu Iniciar, e clique em "Instalar".
+3. Quando terminar, o programa pode abrir sozinho automaticamente (se você
+   deixou a opção "Executar" marcada).
+
+Se, na hora de gerar esse instalador, também foi escolhido associar a
+extensão `.mid` ao programa (dá para digitar também `.kar`), o Windows já reconhece arquivos `.mid` depois
+da instalação: **dar duplo clique em qualquer arquivo .mid abre ele direto
+dentro do MHS MIDI Sequencer**, com o projeto já carregado, sem precisar
+abrir o programa primeiro e depois usar Ctrl+O. Isso vale também pelo menu
+"Abrir com" do Windows.
+
+Observação: `.mid` é uma extensão bem comum - outros programas (tocadores
+de música, outras DAWs) podem, no futuro, "tomar de volta" essa associação
+ao serem instalados. Se isso acontecer, basta clicar com o botão direito
+num arquivo `.mid`, ir em "Abrir com" → "Escolher outro aplicativo" →
+selecionar o MHS MIDI Sequencer e marcar "Sempre usar este aplicativo".
+
+## 2.3 Desinstalando
+
+Dentro da pasta onde o programa foi instalado existe um arquivo
+`Desinstalar_MHS MIDI Sequencer.bat`. Executá-lo remove os atalhos, a
+entrada de desinstalação do Windows, a associação com `.mid` (se foi
+criada) e a própria pasta do programa.
+
+## 2.4 Primeira configuração depois de instalar
+
+Ao abrir o programa pela primeira vez, vale a pena passar pelas 4 abas
+das Preferências (**Ctrl+P**, depois **Ctrl+Tab** para navegar entre as
+abas) antes mesmo de começar a usar - todas são importantes, não só a
+primeira:
+
+**Aba "Midi"** - o básico pra ter som:
+1. Escolha a porta de Saída MIDI (o teclado ou sintetizador que vai
+   tocar o som).
+2. Se quiser, marque uma ou mais portas de Entrada MIDI (o teclado
+   físico usado pra tocar/gravar) - pode marcar mais de uma, o programa
+   escuta todas ao mesmo tempo.
+3. Escolha o "Padrão de Saída MIDI": **XG (Yamaha)** se for usar um
+   teclado Yamaha (como o PSR-SX600) ou **GM-GS (Microsoft Wavetable)**
+   se for usar o sintetizador padrão do Windows.
+
+**Aba "Pastas de Trabalho"** - opcional, mas ajuda a não ter que navegar
+toda vez:
+- Escolha a pasta padrão para Abrir MIDI e a pasta padrão para Salvar
+  MIDI (cada uma com seu próprio botão "Alterar Pasta...").
+
+**Aba "Instrument Definitions"** - importante para os nomes de banco,
+patch e peça de bateria aparecerem falados em vez de só números:
+- Clique em "Adicionar" e escolha o(s) arquivo(s) `.ins` do seu teclado
+  (o do PSR-SX600, por exemplo). Sem isso cadastrado, o programa ainda
+  funciona normalmente, mas fala só os números dos bancos/patches em vez
+  dos nomes dos instrumentos.
+
+**Aba "Metrônomo"** - vale configurar antes de gravar pela primeira vez:
+- Ajuste a nota e o volume da "cabeça" do compasso (o primeiro tempo) e
+  dos demais tempos - cada slider já fala o nome da peça de bateria e
+  toca um preview ao mudar.
+- Se quiser, escolha uma porta MIDI própria para o metrônomo, separada da
+  porta principal (por exemplo, mandar o clique para um segundo
+  dispositivo, sem misturar com o som do teclado).
+- Ajuste o Volume geral do metrônomo.
+- Use o botão "Testar Metrônomo (120 BPM)" para ouvir como ficou antes de
+  fechar a tela.
+
+Depois de passar pelas abas que interessarem, clique em "Aplicar" e
+"Fechar" (ou só "Fechar" - ele já salva as mudanças automaticamente). A
+partir daí, o programa já está pronto para uso - essas escolhas ficam
+salvas e não precisam ser refeitas a cada abertura. Veja a seção 12.14
+para todos os detalhes de cada aba.
+
+---
+
+# 3. Acessibilidade e Leitor de Tela
+
+O programa fala (via `falar_status`) a maior parte do que acontece:
+qual canal e propriedade estão em foco, o valor atual, confirmações de
+ações ("Panic. Todas as notas desligadas.", "Projeto salvo.", "Event List
+Aberto"), avisos de erro, e o resultado de cálculos (BPM detectado,
+quantidade de notas alteradas, etc.).
+
+Pontos importantes:
+
+- **Nenhuma ação depende do mouse.** Todo o programa é navegável e
+  operável só com o teclado.
+- **Tab / Shift+Tab dentro da tela principal repete em voz** o status do
+  canal e da propriedade atualmente em foco - útil se você perdeu o fio
+  da meada ou quer confirmar onde está sem precisar mexer em nada.
+- **Ctrl+Shift+Espaço** fala um resumo completo da seleção atual: quais
+  canais estão selecionados e qual trecho de tempo (se houver) está
+  marcado entre Início (I) e Fim (O).
+- Praticamente toda tela de edição (Drum Setup, Voice Creator, DSP,
+  Propriedades do Canal, Metrônomo dentro de Preferências) fala o nome do
+  parâmetro e o novo valor a cada mudança de slider/spin, e várias também
+  tocam um preview sonoro imediato daquele parâmetro.
+- Onde há abas (Drum Setup, Preferências, Efeitos MIDI), **Ctrl+Tab**
+  troca de aba e o programa fala o nome da aba nova.
+- Diálogos de erro e confirmações usam sempre linguagem direta, nunca só
+  cor/ícone - por exemplo, ao tentar salvar durante uma gravação, o
+  programa fala "Pare a gravação antes de salvar." em vez de travar
+  silenciosamente.
+
+---
+
+# 4. Primeiros Passos
+
+## 4.1 Criando ou abrindo um projeto
+
+- **Ctrl+N** - Novo projeto (pede para salvar o atual se houver alterações
+  pendentes).
+- **Ctrl+O** - Abrir um arquivo `.mid`, `.midi` ou `.kar` (karaokê) existente. O
+  `.kar` é um MIDI comum com a letra guardada em eventos de texto: abre e
+  salva direto, sem renomear a extensão, e a letra e os cabeçalhos do
+  karaokê (`@KMIDI KARAOKE FILE`, `@T`, `@L`...) são preservados. Ainda não
+  existe um editor de letras. Em Salvar Como, escolha o tipo "Karaokê
+  (*.kar)" (ele já vem escolhido quando o arquivo aberto é um `.kar`); o
+  Ctrl+S salva no próprio arquivo, com a extensão que ele já tem.
+- **Menu Arquivo → Arquivos Recentes** - lista os últimos 10 arquivos
+  abertos, para reabrir rapidamente.
+- Se o arquivo passou pelo Windows por associação de extensão (duplo
+  clique num `.mid`), ele já abre carregado, sem precisar fazer nada disso.
+
+Ao carregar um arquivo, o programa passa automaticamente por um processo
+de limpeza e normalização (recupera SysEx e efeitos já existentes,
+organiza a estrutura interna, corrige problemas de arquivos antigos/
+corrompidos como múltiplas Figuras de Compasso empilhadas) e avisa em voz:
+"MIDI carregado, extraído e normalizado com sucesso!".
+
+## 4.2 Guias (múltiplos arquivos abertos ao mesmo tempo)
+
+O programa funciona com guias, como abas de navegador - dá para ter vários
+projetos abertos ao mesmo tempo:
+
+- **Ctrl+Shift+N** - abre uma guia nova em branco.
+- **Ctrl+F4** ou **Ctrl+W** - fecha a guia atual (pede confirmação de
+  salvar se houver alterações; se for a última guia aberta, só limpa o
+  projeto em vez de fechar o programa).
+- Ao trocar de guia, o programa fala o número e o título da guia nova, e
+  reenvia automaticamente toda a configuração de som (Drum Setup, DSP
+  etc.) daquele projeto para o teclado.
+- Se você tentar abrir um arquivo novo enquanto a guia atual já está em
+  uso (com conteúdo, alterações não salvas, ou um arquivo carregado), o
+  programa abre uma guia nova sozinho antes de carregar - seu trabalho
+  atual nunca é substituído sem avisar.
+
+## 4.3 Navegação principal (canais e propriedades)
+
+A tela principal mostra 16 canais MIDI, cada um com uma lista de
+propriedades editáveis: Nome, Input, Mute, Solo, Arm, Volume, Pan, Grave,
+Agudo, Expression, Bank (Banco), Patch (Instrumento), Reverb, Chorus,
+Transpose, Pitch Bend, Mono/Poly, Porta Time.
+
+- **Seta Cima / Seta Baixo** - troca de canal.
+- **Seta Esquerda / Seta Direita** - troca de propriedade dentro do canal
+  atual.
+- **+ / -** - aumenta ou diminui o valor da propriedade em foco (em
+  Mute/Solo/Arm/Mono-Poly, alterna ligado/desligado; em Banco/Patch, pula
+  para o próximo valor que realmente existe na lista de nomes carregada).
+- **Enter** - edita a propriedade em foco. Em propriedades de liga/desliga
+  já alterna direto; nas demais, abre uma caixa para digitar o valor
+  exato.
+- **F2** - renomeia o(s) canal(is) selecionado(s).
+- **F5 / F6 / F7** - alternam Mute / Solo / Arm do canal em foco
+  diretamente, sem precisar navegar até a propriedade.
+- **Alt+F5 / Alt+F6 / Alt+F7** - desligam Mute / Solo / Arm em **todos**
+  os canais de uma vez.
+- **Ctrl+Shift+F5 / F6 / F7** - fala quantos e quais canais estão
+  atualmente com Mute / Solo / Arm ativado.
+- **Tecla de Menu/Aplicativo** (ou clique direito no painel) - abre a tela
+  "Propriedades do Canal" completa (ver seção 12.13).
+
+## 4.4 Selecionando vários canais
+
+Várias ferramentas do programa (quantização, humanizar, envelopes,
+efeitos MIDI, drum setup em lote, etc.) trabalham sobre **todos os canais
+selecionados** ao mesmo tempo, não só o canal em foco:
+
+- **Ctrl+A** - seleciona todos os 16 canais.
+- **Shift+Seta Cima / Shift+Seta Baixo** - navega entre canais mantendo a
+  seleção.
+- **Shift+Espaço** - ativa seleção não contínua (marca ou desmarca o
+  canal atual, um a um, em qualquer ordem).
+- **Shift+Esc** - limpa a seleção de canais e também a seleção de tempo
+  (Início/Fim).
+
+## 4.5 Selecionando um trecho de tempo (Início/Fim)
+
+Várias ferramentas (envelopes, fade, efeitos MIDI offline, copiar/colar)
+trabalham sobre um trecho específico da música, marcado por dois pontos:
+
+- **I** - marca o Início (IN) do trecho, na posição atual do cursor de
+  reprodução.
+- **O** - marca o Fim (OUT) do trecho.
+- **Home** - pula o cursor para a marca de Início.
+- **End** - pula o cursor para a marca de Fim.
+- **Delete/Backspace** (fora do Event List) - apaga o conteúdo do trecho
+  selecionado.
+- **Ctrl+C / Ctrl+X / Ctrl+V** - copia / recorta / cola o trecho
+  selecionado (nos canais selecionados).
+- **Shift+V** - "Colar Repetido": cola o trecho copiado várias vezes
+  seguidas, com controle de espaçamento (ver seção 12.23).
+
+---
+
+# 5. Tocar, Pausar, Gravar e Navegar na Música
+
+- **Espaço** - Tocar / Parar.
+- **Ctrl+Espaço** - Pausar / Retomar (retoma exatamente de onde parou, sem
+  demora, mesmo em projetos com Drum Setup carregado - desde que nada
+  tenha sido editado enquanto estava pausado).
+- **R** - Gravar (é preciso ter ao menos um canal "Armado" com F7 antes).
+- **Ctrl+R** - Gravar aguardando a primeira nota tocada no teclado físico
+  para só então começar a gravação de fato.
+- **Ctrl+Shift+R** - configura um Pré-roll: quantos compassos de contagem
+  tocar (com metrônomo) antes da gravação realmente começar.
+- **F3** - Panic: desliga todas as notas presas imediatamente.
+- **Ctrl+F3** - Reset Geral do teclado (reset completo via SysEx + todas
+  as notas desligadas).
+- **Ctrl+M** - Liga/desliga o metrônomo.
+- **W** ou **Ctrl+Home** - vai para o início da música.
+- **Ctrl+End** - vai para o fim da música.
+- **Page Up / Page Down** - vai ao compasso anterior/próximo.
+- **Ctrl+Page Up / Ctrl+Page Down** - vai ao tempo (beat) anterior/próximo.
+- **Ctrl+F** - digitar um número de compasso para ir direto até ele.
+- **Ctrl+Shift+T** - abre uma caixa para digitar o BPM com casas decimais.
+- **T** - Tap Tempo: bata o ritmo (aperte a tecla T no compasso) para
+  calcular o BPM na hora. Funciona em qualquer lugar da tela principal, e
+  também dentro da tela de Áudio Guia. Se a música estiver tocando, a
+  batida seguinte já ajusta o andamento sem interromper a reprodução.
+
+A gravação funciona assim: toque no seu teclado físico com pelo menos um
+canal armado (F7); os eventos gravados só entram de vez na música quando
+você para a gravação. Se a Quantização em Tempo Real estiver ativada, as
+notas já são alinhadas à grade automaticamente enquanto você grava.
+
+---
+
+# 6. Desfazer e Refazer
+
+- **Ctrl+Z** - Desfazer a última ação.
+- **Ctrl+Shift+Z** - Refazer.
+
+Cada guia tem sua própria pilha de até 50 ações. Praticamente qualquer
+mudança que altera o arquivo (editar nota, mudar timbre, aplicar
+quantização, configurar Drum Setup, etc.) pode ser desfeita. O programa
+fala o nome da ação desfeita/refeita, por exemplo "Desfeito: Aplicar
+Quantização".
+
+---
+
+# 7. Referência Rápida - Todos os Atalhos Globais
+
+Esta seção lista tudo o que funciona em qualquer lugar da tela principal
+(fora de diálogos). Os atalhos específicos de dentro da Lista de Eventos
+estão na seção 13.
+
+## Navegação e seleção
+
+- Seta Cima / Seta Baixo: canal anterior/próximo
+- Seta Esquerda / Seta Direita: propriedade anterior/próxima
+- Shift+Seta Cima / Shift+Seta Baixo: navega canal mantendo seleção
+- Shift+Espaço: seleção não contínua de canal (marca/desmarca)
+- Ctrl+A: seleciona todos os canais
+- Shift+Esc: limpa seleção de canais e de tempo
+- Ctrl+Shift+Espaço: fala o resumo da seleção atual
+- Tab / Shift+Tab: repete em voz o status atual
+- Tecla Menu/Aplicativo: abre Propriedades do Canal
+
+## Edição de propriedades do canal
+
+- Enter: edita/ativa a propriedade em foco
+- + / -: incrementa/decrementa o valor da propriedade em foco
+- F2: renomear canal(is)
+- F5 / F6 / F7: Mute / Solo / Arm do canal em foco
+- Alt+F5 / Alt+F6 / Alt+F7: desliga Mute/Solo/Arm em todos os canais
+- Ctrl+Shift+F5 / F6 / F7: fala quantos/quais canais estão Mute/Solo/Arm
+- F8: liga/desliga Local Control do teclado físico
+- Ctrl+L: Clonar Configurações do Canal para outro canal
+
+## Transporte
+
+- Espaço: Tocar/Parar
+- Ctrl+Espaço: Pausar/Retomar
+- R: Gravar
+- Ctrl+R: Gravar aguardando a primeira nota
+- Ctrl+Shift+R: Pré-roll (contagem antes de gravar)
+- F3: Panic (desliga notas presas)
+- Ctrl+F3: Reset Geral do teclado
+- Ctrl+M: liga/desliga metrônomo
+
+## Navegação musical
+
+- W ou Ctrl+Home: início da música
+- Ctrl+End: fim da música
+- Page Up / Page Down: compasso anterior/próximo
+- Ctrl+Page Up / Ctrl+Page Down: tempo (beat) anterior/próximo
+- Ctrl+F: ir para um número de compasso
+- Ctrl+Shift+T: digitar BPM com casas decimais
+- T: Tap Tempo (bata o ritmo para calcular e ajustar o BPM na hora - funciona
+  tocando ou parado)
+- Ctrl++ / Ctrl+-: aumenta/diminui o andamento em 1 BPM
+- Shift+Ç / Shift+^: vai ao ponto de mudança de BPM anterior/próximo
+- Shift+T: edita o BPM do envelope de tempo em foco
+- Ctrl+Ç / Ctrl+^: vai à fórmula de compasso anterior/próxima
+
+## Seleção de tempo (trecho) e edição
+
+- I / O: marca Início / Fim do trecho
+- Home / End: pula para a marca de Início / Fim
+- Delete / Backspace: apaga o trecho selecionado
+- Ctrl+C / Ctrl+X / Ctrl+V: copiar / recortar / colar
+- Shift+V: Colar Repetido
+- Shift+M: Inserir Compassos em Branco
+- Ctrl+Shift+P: Ripple Editing (modo "empurrar o resto da música")
+- Ctrl+Shift+M: Figura de Compasso
+- , (vírgula) e suas variações com Shift/Ctrl+Shift/Alt/Ctrl+Alt: empurra a
+  seleção/nota para trás, em granularidades diferentes
+- . (ponto) e suas variações: empurra a seleção/nota para frente
+
+## Guias (múltiplos arquivos)
+
+- Ctrl+N: Novo
+- Ctrl+O: Abrir
+- Ctrl+S: Salvar
+- Ctrl+Shift+S: Salvar Como
+- Ctrl+Shift+N: Nova Guia
+- Ctrl+F4 ou Ctrl+W: Fechar Guia
+
+## Desfazer
+
+- Ctrl+Z: Desfazer
+- Ctrl+Shift+Z: Refazer
+- Ctrl+E: Lista de Eventos (Event List)
+
+## Áudio Guia (playback de referência)
+
+- Ctrl+G: abre a tela de Áudio Guia
+- Ctrl+Alt+Seta Cima / Ctrl+Alt+Seta Baixo: aumenta/diminui volume do Áudio Guia
+- Ctrl+Alt+M: muta o Áudio Guia
+- Alt+Shift+Esquerda/Direita: ajusta sincronismo em 1ms
+- Ctrl+Alt+Shift+Esquerda/Direita: ajusta sincronismo em 5ms
+- T: Tap Tempo (ver "Navegação musical" acima - também funciona aqui dentro)
+
+## Ferramentas e telas de edição em lote
+
+- Ctrl+Q: Quantização Offline
+- Q: Quantização em Tempo Real (input/gravação)
+- H: Humanizar
+- Ctrl+K: Efeitos MIDI Offline (Arpejo/Delay/Harpa/Bateria)
+- Shift+E: Envelope de Automação de CC
+- Shift+C: Envelope de Tempo (BPM)
+- Ctrl+Shift+F: Fade In/Fade Out
+- Ctrl+D: Drum Setup Yamaha XG
+
+## Timbre, DSP e SysEx
+
+- Ctrl+T: Voice Creator (edição de timbre)
+- Ctrl+Shift+D: Efeitos DSP Globais (Reverb e Chorus)
+- Ctrl+Shift+I: Efeito de Inserção/Variation DSP do canal
+- Ctrl+Shift+V: Velocity Midi Control
+- Ctrl+Shift+C: Conversor MIDI (roteamento MIDI→CC)
+- Ctrl+Shift+Y: Editor de SysEx Raiz
+- Ctrl+Shift+X: Gerenciador de SysEx Existentes
+
+## Transposição e outros
+
+- Ctrl+Seta Cima/Baixo/Esquerda/Direita: transpõe as notas recebidas do
+  teclado físico (MIDI IN) antes de tocar/gravar
+- Ctrl+P: Preferências
+
+---
+
+# 8. Menu Arquivo
+
+- **Novo** (Ctrl+N) - projeto em branco.
+- **Nova Guia** (Ctrl+Shift+N).
+- **Fechar Guia** (Ctrl+F4).
+- **Carregar MIDI** (Ctrl+O).
+- **Arquivos Recentes** - submenu com os últimos arquivos abertos.
+- **Salvar** (Ctrl+S).
+- **Salvar como...** (Ctrl+Shift+S).
+
+---
+
+# 9. Menu Editar
+
+- **Desfazer** (Ctrl+Z) / **Refazer** (Ctrl+Shift+Z).
+- **Selecionar Todos os Canais** (Ctrl+A).
+- **Clonar Configurações do Canal para...** (Ctrl+L) - copia timbre,
+  mixagem, Drum Setup e Voice Creator inteiros de um canal para outro.
+- **Event List (Lista de Eventos)...** (Ctrl+E) - ver seção 13.
+- **Apagar Seleção de Tempo** (Delete).
+
+---
+
+# 10. Menu Transporte
+
+- **Reproduzir / Parar** (Espaço).
+- **Pausar / Retomar** (Ctrl+Espaço).
+- **Gravar** (R).
+- **Gravar (Aguardar Nota)** (Ctrl+R).
+- **Marcar Início da Seleção (IN)** (I).
+- **Marcar Fim da Seleção (OUT)** (O).
+- **Panic (Desligar Notas Presas)** (F3).
+- **Reset Geral do Teclado** (Ctrl+F3).
+
+---
+
+# 10-B. Menu Vozes
+
+Arquivos de voz do teclado Yamaha (`.vce`): um arquivo MIDI com toda a
+configuração de UMA voz no canal 1.
+
+- **Importar Voz (.vce, .drm, .mgv, .sar, .liv) para o Canal Atual...** - a voz entra no canal em
+  foco (Bank, Patch, Expression, Reverb, Chorus, Grave/Agudo, Portamento,
+  Mono/Poly e todo o Voice Creator). As colunas ficam preenchidas, o
+  teclado toca a voz na hora e o projeto já fica pronto para salvar.
+  Vai para o Ctrl+Z.
+- **Exportar Voz do Canal Atual (.vce, .drm, .mgv, .sar, .liv)...** - grava a voz do canal em foco
+  num `.vce`, sempre no canal 1, no formato dos arquivos do teclado.
+
+Tipos de arquivo aceitos: `.vce` (voz comum), `.drm` (kit de bateria),
+`.mgv` (MegaVoice), `.sar` (Super Articulation) e `.liv` (Live!). Todos
+têm a mesma estrutura (um MIDI com a voz no canal 1). Ao exportar, o
+programa sugere a extensão pelo Bank do canal (Bank MSB 62 = `.drm`,
+MSB 8 = `.mgv`/`.sar`, LSB 115 = `.liv`, o resto = `.vce`), e você pode
+trocar o tipo na lista de formatos da janela de salvar. Os arquivos
+`.mgv`, `.sar` e `.liv` trazem o efeito de Inserção completo e mensagens
+proprietárias com bytes acima de 127; o programa lê e grava tudo
+diretamente, sem perder nada.
+
+O Voice Creator (Ctrl+T) ganhou 20 parâmetros: Pressão de Canal (CAT),
+Controle Assinável 1 (AC1), Envelope de Afinação (Pitch EG), Limite de
+Velocity e frequência do EQ. As mensagens proprietárias `43 73 01 50/51`
+do `.vce` são guardadas e devolvidas ao exportar, mas não entram no
+projeto; o efeito de Inserção da voz também não é aplicado.
+
+---
+
+# 11. Menu Ferramentas
+
+- **Áudio Guia / Playback...** (Ctrl+G) - ver seção 12.20.
+- **Mutar Áudio Guia** (Ctrl+Alt+M).
+- **Adiantar/Atrasar Áudio Guia (1ms / 5ms)** - ajuste fino de sincronismo.
+- **Ripple Editing...** (Ctrl+Shift+P) - ver seção 12.19.
+- **Metrônomo** (Ctrl+M).
+- **Envelope de Tempo (BPM)...** (Shift+C) - ver seção 12.16.
+- **Envelope de Automação de CC...** (Shift+E) - ver seção 12.15.
+- **Fade In / Fade Out (Expression)...** (Ctrl+Shift+F) - ver seção 12.18.
+- **Figura de Compasso (Time Signature)...** (Ctrl+Shift+M) - ver seção
+  12.17.
+- **Aumentar/Diminuir Tempo (+1/-1)** (Ctrl++ / Ctrl+-).
+- **Quantização Offline...** (Ctrl+Q) - ver seção 12.6.
+- **Quantização Tempo Real (Input)...** (Q) - ver seção 12.7.
+- **Humanizar...** (H) - ver seção 12.8.
+- **Efeitos MIDI Offline (Arpejo, Delay, Harpa, Bateria)...** (Ctrl+K) -
+  ver seção 12.9 (Arpejo/Delay/Harpa exigem um trecho marcado com I/O;
+  Bateria não).
+- **Drum Setup Yamaha XG...** (Ctrl+D) - ver seção 12.1.
+
+---
+
+# 12. Telas e Editores (Guia Detalhado)
+
+## 12.1 Drum Setup Yamaha XG (Ctrl+D)
+
+Editor completo de afinação/configuração de peças de bateria de um canal,
+com 3 abas (Ctrl+Tab troca de aba):
+
+**Aba 1 - Edição e Filtros (SysEx)**: um slider escolhe qual peça de
+bateria (nota) está sendo editada; abaixo, 17 controles: Volume da Peça,
+Panorâmico, Envio de Reverb, Envio de Chorus, Envio de Variação, Cutoff
+(abafar), Ressonância, Ataque, Decay 1, Decay 2, Afinação Grossa, Afinação
+Fina, Agrupamento (Alt Group), Key Assign, e EQ de Grave/Agudo (ganho e
+frequência). Usa a mensagem SysEx exclusiva da Yamaha - funciona 100% em
+teclados Yamaha XG reais (como o PSR-SX600).
+
+**Aba 2 - Montagem de Kit (Custom)**: troca o som de uma peça por outro
+som de qualquer kit de bateria disponível no seu teclado/sintetizador:
+escolha a Peça Alvo, o Banco e o Patch do kit "doador", a Peça do kit
+doador, e clique em "Aplicar Mapeamento desta Peça".
+
+**Aba 3 - Edição via NRPN (Padrão MIDI)**: os mesmos 15 parâmetros
+principais da Aba 1 (Volume, Pan, Reverb, Chorus, Variation, Cutoff,
+Ressonância, Ataque, Decay, Afinação Grossa/Fina, EQ Grave/Agudo ganho e
+frequência), mas gravados como NRPN puro (Control Change 99/98/6) em vez
+de SysEx exclusiva da Yamaha - funciona em **qualquer** sintetizador
+compatível com XG ou GS, não só num teclado Yamaha.
+
+Em todas as abas, cada mudança de valor envia o som em tempo real (você
+ouve a mudança na hora) e fala o nome do parâmetro e o novo valor.
+Espaço, dentro da tela, toca/para a música.
+
+Abaixo das abas, o botão **"Remover Toda a Configuração de Bateria deste
+Canal"** apaga de uma vez só tudo que foi configurado nas 3 abas (SysEx,
+Montagem de Kit e NRPN) para o canal atual, e já reseta o kit ao vivo no
+teclado (reenviando Banco/Patch) para você ouvir o padrão de fábrica na
+hora, sem precisar fechar e reabrir a tela.
+
+## 12.2 Efeitos DSP Globais - Reverb e Chorus (Ctrl+Shift+D)
+
+Duas abas, "Reverb Global" e "Chorus Global". Em cada uma: escolha a
+Categoria (família do efeito), o Preset dentro da categoria, o Retorno
+(balanço seco/molhado), e até 16 parâmetros específicos daquele efeito
+(os nomes mudam conforme a categoria escolhida - por exemplo "Device:
+Vintage Tube" em efeitos de distorção). Tem botões de Tocar/Parar e
+Pausar/Retomar dentro da própria tela para você testar o efeito enquanto
+ajusta.
+
+## 12.3 Efeito de Inserção / Variation DSP do canal (Ctrl+Shift+I)
+
+Fluxo em duas telas. Primeiro você escolhe:
+- Qual "Gaveta" de efeito (a Gaveta 1 é a Variation; as Gavetas 2 a 7 são
+  Inserção).
+- Quais canais vão passar por esse efeito (pode marcar mais de um -
+  o programa cuida de duplicar o efeito nos canais extras quando é uma
+  Inserção, ou de rotear vários canais pro mesmo efeito quando é a
+  Variation).
+- A família do efeito e o preset.
+
+Depois abre o editor específico daquele efeito, com até 16 parâmetros,
+mais um controle de Dry/Wet Global e (se você marcou 2 ou mais canais) um
+controle extra por canal, pra dosar quanto cada canal recebe do efeito.
+
+## 12.4 Voice Creator - Edição de Timbre (Ctrl+T)
+
+Editor de síntese do canal atual: 30 parâmetros roláveis, todos enviados
+ao vivo pro teclado a cada mudança. Em ordem:
+
+- **Transposição fina** (Note Shift) e **Desafinação** (Detune - um
+  único controle combinado, não "grosso"/"fino" separados).
+- **Sensibilidade de Toque** no volume e no piso (Velocity Sense
+  Depth/Offset).
+- **Tessitura** mínima e máxima (Note Limit Low/High).
+- **Amplitude** (Dry Level).
+- **Vibrato**: Velocidade, Intensidade, Atraso (LFO).
+- **Filtro**: Cutoff (brilho) e Ressonância (wah).
+- **Envelope**: Ataque, Decay, Release.
+- **Roda de Modulação (MW)** e **Alavanca de Pitch Bend (Bend)**: 6
+  controles cada (Afinação/Filtro/Amplitude, mais o LFO de cada um).
+- **Portamento**: Modo (Normal/Pitch Poly/Cross Fade), Modo do Tempo
+  (Rate/Time) e Prioridade no Modo Mono. O Liga/Desliga e o Tempo do
+  Portamento em si **não** ficam aqui - são a propriedade "Porta Time" do
+  canal, na tela principal (seção 4.3): qualquer valor acima de 0 já liga
+  o Portamento.
+
+Home/End/Page Up/Page Down ajustam o controle em foco em saltos maiores.
+
+## 12.5 Propriedades do Canal (Tecla Menu/Aplicativo, ou clique direito)
+
+Tela de edição completa de um canal: Banco, Patch/Instrumento (a lista de
+patches muda conforme o banco escolhido), e 5 controles deslizantes -
+Volume, Pan, Expression, Reverb, Chorus - todos com envio de som em tempo
+real a cada mudança.
+
+## 12.6 Quantização Offline (Ctrl+Q)
+
+Alinha as notas já gravadas a uma grade rítmica. Escolha a grade (de
+Semínima a Semifusa, incluindo tercinas) e a Força em porcentagem (100% =
+alinha totalmente; valores menores fazem uma correção parcial, mais
+suave). Espaço toca um preview em tempo real de como ficaria (sem gravar
+de fato); Enter confirma e aplica.
+
+## 12.7 Quantização em Tempo Real / Gravação (Q)
+
+Ativa a quantização automática durante a gravação: marque "Gravar
+Quantizando" e escolha a grade. A partir daí, toda nota gravada já entra
+alinhada.
+
+## 12.8 Humanizar (H)
+
+Adiciona variação sutil e aleatória de tempo e velocidade às notas do
+trecho/canais selecionados, pra soar menos "robótico". Dois controles:
+Variação de Tempo Máxima (em milissegundos, até 500ms) e Variação de
+Velocity Máxima (até 127). O preview (Espaço) sempre toca exatamente o
+mesmo resultado que será gravado ao confirmar - não é sorteado de novo a
+cada teste.
+
+## 12.9 Efeitos MIDI Offline - Arpejo, Delay, Harpa e Bateria (Ctrl+K)
+
+Quatro abas (Ctrl+Tab troca):
+
+- **Arpejador**: Resolução (grade rítmica), Direção (Acima / Abaixo /
+  Alternado / Ordem em que foi tocado / Aleatório), Oitavas (1 a 10),
+  Duração/Gate em porcentagem. Exige um trecho marcado com I/O.
+- **MIDI Delay**: Resolução do eco, Número de repetições, Decaimento de
+  velocidade a cada repetição. Exige um trecho marcado com I/O.
+- **Harpa / Strum**: Direção do arrastão (Subindo / Descendo / Vai e
+  Volta), Velocidade da palhetada (5 estilos, incluindo sincronizado com
+  o grid), Resolução do grid, Extensão do acorde em oitavas (1 a 4).
+  Exige um trecho marcado com I/O.
+- **Bateria (Presets)**: 147 desenhos prontos de bateria (rufos de
+  caixa/prato/tom, viradas de tom, brincadeiras de hi-hat/prato,
+  combinados), organizados por Categoria - escolha a categoria, Seta
+  Cima/Baixo na lista já toca um preview de cada desenho; OK insere o
+  desenho no canal em foco, por cima do que já existir (soma, não
+  substitui). **Não** precisa de trecho marcado - insere a partir da
+  posição atual do cursor.
+
+Espaço toca/para um preview ao vivo já com o efeito aplicado; trocar de
+aba atualiza o preview na hora.
+
+## 12.10 Editor de SysEx Raiz (Ctrl+Shift+Y)
+
+Monta manualmente uma mensagem SysEx, byte a byte: Cabeçalho, Multi Part,
+Canal, Endereço (tudo em hexadecimal), um controle deslizante para o
+Valor (mostrado também em hexadecimal), e o Fim da mensagem. Útil para
+quem já conhece o protocolo XG e quer mandar algo que as telas prontas do
+programa não cobrem. Espaço reenvia o SysEx montado e toca a música.
+
+## 12.11 Gerenciador de SysEx Existentes (Ctrl+Shift+X)
+
+Lista todas as mensagens SysEx já presentes no arquivo carregado, com
+filtros por canal (Todos / Canal Atual) e por tipo: Todos, Mixagem (Bank/
+Patch/Volume/Pan/Reverb Send/Chorus Send - os 6 campos que também saem
+sempre como CC/Program Change comum, sem precisar de SysEx), Voice
+Creator (Grave/Agudo, Detune, Portamento e qualquer outro parâmetro de
+timbre que só existe via SysEx), DSP Global (Reverb/Chorus), DSP
+Variation (Gaveta 1), DSP Insertion (Gavetas 2-7), Drum Setup -
+Parâmetros (Guia 1 do Drum Setup) e Drum Setup - Montagem de Kit (Guia 2)
+- a Guia 3 do Drum Setup (via NRPN) não aparece aqui porque não é SysEx.
+A lista aceita seleção múltipla (Shift/Ctrl, ou Ctrl+A para selecionar
+tudo) e tem botões para Editar, Apagar, Copiar, Recortar, Colar, Importar
+arquivo `.syx` e Exportar para `.syx`. O programa faz um backup de
+segurança das trilhas antes de abrir essa tela. Apagar tudo é definitivo:
+salvando o arquivo (ou só fechando e reabrindo esta tela), o que foi
+apagado não volta mais sozinho.
+
+## 12.12 Roteador / Conversor MIDI (Ctrl+Shift+C)
+
+Configura até 4 "rotas" de conversão em tempo real (por exemplo,
+transformar o Pitch Bend recebido em um Control Change de saída). Cada
+rota tem: ativar/desativar, escolha de Origem (Pitch Bend ou qualquer dos
+128 CCs) e escolha de Destino.
+
+## 12.13 Propriedades do Canal
+
+Ver seção 12.5 (mesma tela, acessível também pela tecla Menu/Aplicativo).
+
+## 12.14 Preferências (Ctrl+P)
+
+Quatro abas (Ctrl+Tab navega entre elas):
+
+- **Midi**: lista de Entradas MIDI (pode marcar mais de uma - o programa
+  escuta todas ao mesmo tempo), escolha da Saída MIDI, e o Padrão de
+  Saída MIDI (XG Yamaha ou GM-GS Microsoft Wavetable).
+- **Pastas de Trabalho**: pasta padrão para Abrir e pasta padrão para
+  Salvar arquivos MIDI.
+- **Instrument Definitions**: lista de arquivos `.ins` cadastrados (mapas
+  de nomes de instrumento/patch), com botões para Adicionar e Remover.
+- **Metrônomo**: nota e volume da "cabeça" do compasso (primeiro tempo) e
+  dos demais tempos, escolha de porta MIDI própria para o metrônomo
+  (separada da porta principal, se quiser), volume geral, e um botão
+  "Testar Metrônomo (120 BPM)".
+
+Todas as portas MIDI (Entrada, Saída e a porta própria do Metrônomo)
+reconectam sozinhas quando o Windows renumera o nome de um dispositivo
+(comum a cada login, ex.: "Digital Keyboard-1 4" virar "Digital
+Keyboard-1 5") - não é preciso escolher a porta de novo manualmente.
+
+Botões "Aplicar" e "Fechar" no rodapé (Fechar já salva as mudanças
+automaticamente).
+
+## 12.15 Envelope de Automação de CC (Shift+E)
+
+Exige um trecho marcado com I/O. Cria uma rampa gradual de valores de um
+Control Change ao longo do trecho - escolha o CC (de uma lista com os
+128 nomeados), o Valor Inicial e o Valor Final.
+
+## 12.16 Envelope de Tempo / BPM (Shift+C)
+
+Digite um BPM novo para uma troca abrupta de andamento, ou marque
+"Alteração de tempo gradual" para revelar os campos de BPM Inicial e BPM
+Final - cria uma rampa de andamento dentro do trecho marcado com I/O.
+
+Navegar e editar os envelopes que já existem: Shift+Ç / Shift+^ vão ao
+envelope de tempo anterior / próximo. Com o cursor em cima de um deles,
+**Shift+T** abre a caixa de BPM daquele envelope e troca só o andamento
+dele (mesmo ponto da música, os outros envelopes ficam como estão; Ctrl+Z
+desfaz). **Backspace** apaga o envelope em foco; o único andamento do
+começo da música não pode ser apagado (use Ctrl+Shift+T para mudar o
+andamento geral, que também substitui todos os envelopes por um só).
+
+## 12.17 Figura de Compasso / Time Signature (Ctrl+Shift+M)
+
+Define o Numerador e o Denominador (2, 4, 8, 16 ou 32) da fórmula de
+compasso, e se ela deve ser inserida só no ponto atual do cursor ou
+mudada globalmente.
+
+## 12.18 Fade In / Fade Out (Ctrl+Shift+F)
+
+Exige um trecho marcado com I/O. Escolha entre Fade In e Fade Out, e se
+quer aplicar em todos os canais de uma vez. Usa a Expression (CC11), não
+o Volume (CC7) - assim o fade não bagunça o balanço de mixagem que você
+já ajustou.
+
+## 12.19 Ripple Editing (Ctrl+Shift+P)
+
+Três opções: Desativado / Ativado para os Canais Selecionados / Ativado
+para Todos os Canais. Quando ativado, operações de mover/cortar trechos
+"empurram" automaticamente o restante da música, em vez de deixar
+espaços em branco.
+
+## 12.20 Áudio Guia / Playback (Ctrl+G)
+
+Sincroniza um arquivo de áudio externo (uma gravação de referência) com
+o projeto MIDI. Escolha o arquivo pelo botão "Procurar...", ajuste o
+Volume e o Deslocamento (offset de sincronismo em milissegundos - Setas
+Esquerda/Direita movem de 10ms, Cima/Baixo de 1ms quando o controle está
+em foco). Se o nome do arquivo tiver o BPM nele (por exemplo
+"Groove_120bpm.wav"), o programa detecta sozinho e já ajusta o andamento
+do projeto.
+
+O áudio fica ancorado exatamente no **segundo** em que foi carregado (ou
+para onde você o deslocou com o ajuste fino) - como um arquivo de áudio
+de verdade não "estica" junto com o andamento, ele fica parado ali, feito
+um relógio, mesmo que você mude o BPM depois (inclusive com o Tap Tempo -
+seção 5). Esse é justamente o fluxo pensado para achar o andamento certo
+de um áudio já gravado: carregue o áudio, use o Tap Tempo batendo junto
+com ele até o andamento do projeto bater com o dele, e só depois use o
+ajuste fino de sincronismo (Ctrl+Alt+Shift+Esquerda/Direita ou
+Alt+Shift+Esquerda/Direita) para encaixar o áudio no tempo exato - ele
+não vai mais se mover sozinho depois disso.
+
+**O Áudio Guia é salvo por projeto.** Ao carregar um áudio, o programa
+grava um pequeno arquivo "irmão" do seu `.mid` (mesmo nome, extensão
+`.mhsaudio`, na mesma pasta) guardando o caminho do áudio, o volume e o
+deslocamento. Da próxima vez que você abrir esse mesmo `.mid` - hoje,
+amanhã, ou depois de fechar e reabrir o programa - o Áudio Guia é
+carregado sozinho, sem precisar escolher o arquivo de novo. Um projeto
+`.mid` sem esse arquivo-irmão simplesmente abre sem áudio nenhum, sem
+herdar o áudio de outro projeto que você tenha usado antes. Se você mover
+ou apagar o arquivo de áudio original, ou "Salvar Como" um projeto e
+apagar o arquivo-irmão antigo manualmente, o programa nota que o áudio
+referenciado não existe mais e simplesmente ignora, sem travar.
+
+## 12.21 BPM Preciso (Ctrl+Shift+T)
+
+Caixa para digitar o andamento com até 3 casas decimais (aceita ponto ou
+vírgula); Setas Cima/Baixo ajustam de 1 em 1 BPM.
+
+## 12.22 Inserir Compassos em Branco (Shift+M)
+
+Insere uma quantidade de compassos em branco a partir do cursor,
+empurrando o restante da música para frente. Controles: Quantidade de
+Compassos, Numerador e Denominador da fórmula de compasso a inserir.
+
+## 12.23 Colar Repetido (Shift+V)
+
+Cola o trecho copiado várias vezes seguidas. Escolha o Número de
+Repetições e o Modo: sem espaços (cada cópia gruda na anterior), com
+intervalo fixo em segundos, ou com intervalo fixo numa resolução
+rítmica (de Semibreve a Semicolcheia Tercina).
+
+## 12.24 Pré-roll (Ctrl+Shift+R)
+
+Define quantos compassos de contagem (com metrônomo) tocam antes da
+gravação começar de fato. Zero compassos = gravação instantânea ao
+apertar Gravar.
+
+## 12.25 Velocity Midi Control (Ctrl+Shift+V)
+
+Recomprime em tempo real a faixa dinâmica das notas recebidas do teclado
+físico: ative o controle e ajuste o Velocity Mínimo e o Velocity Máximo
+aceitos. Toca uma nota de teste a cada ajuste, para você ouvir o efeito
+na hora.
+
+## 12.26 Clonar Configurações do Canal (Ctrl+L)
+
+Copia timbre, mixagem, Drum Setup e Voice Creator inteiros de um canal
+para outro canal escolhido numa lista.
+
+---
+
+# 13. A Lista de Eventos - Event List (Ctrl+E)
+
+A Lista de Eventos é o editor detalhado, evento a evento, de notas,
+Control Changes, mudanças de Banco/Patch e Pitch Wheel de um ou mais
+canais. É uma lista navegada inteiramente pelo teclado, sem cabeçalhos
+visuais - cada linha é uma frase falada descrevendo o evento.
+
+Ao abrir, o cursor já começa na posição correspondente ao ponto atual de
+reprodução.
+
+## Navegação
+
+- Seta Cima / Seta Baixo: evento anterior/próximo (toca um preview da
+  nota ao passar).
+- Page Up / Page Down: pula 10 eventos.
+- Home / End: marca de Início / Fim (ou primeiro/último evento visível, se
+  não houver marca).
+- Ctrl+Home: vai para o primeiro evento de nota da lista. Ctrl+End: vai para
+  o último evento da lista (de qualquer tipo).
+- Com Shift em qualquer navegação acima: estende a seleção.
+- W: volta para o início da música.
+
+## Edição
+
+- **Enter** - edita o evento em foco (abre a caixa apropriada: nota,
+  Control Change, ou mudança de Banco/Patch).
+- **Insert** ou **Ctrl+I** - insere um novo evento.
+- **Delete / Backspace** - apaga o(s) evento(s) selecionado(s).
+- **D** - duplica o evento em foco.
+- **F** - duplica como "flam" (efeito de duplicação com pequeníssimo
+  deslocamento, útil para dobrar uma nota de bateria).
+- **Ctrl+C / Ctrl+X / Ctrl+V** - copiar / recortar / colar evento(s).
+- **Setas Esquerda/Direita**, com modificadores, ajustam o evento em foco
+  (e todos os selecionados do mesmo tipo):
+  - Nota: sem modificador = sobe/desce 1 semitom; Ctrl = 1 oitava; Shift =
+    ajusta a velocity em 1; Ctrl+Shift = velocity em 10; Alt = duração em
+    1 tick; Ctrl+Alt = duração em 5 ticks; Shift+Alt = posição (atrasa/
+    adianta) em 1 tick; Ctrl+Shift+Alt = posição em 5 ticks.
+  - Control Change: sem modificador = número do CC; Ctrl = valor do CC.
+  - Program Change: sem modificador = número do banco; Ctrl = número do
+    patch.
+  - Pitch Wheel: sem modificador = valor do pitch (passos de 100).
+
+## Seleção e filtros
+
+- **1** a **5** - aplica um filtro rápido por tipo de evento.
+- **Ctrl+A** - seleciona todos os eventos visíveis.
+- **Shift+A** - seleciona todos os eventos "iguais" ao evento em foco
+  (mesma nota, ou mesmo número de CC).
+- **Shift+Espaço** - ativa seleção não contínua (marca/desmarca o evento
+  em foco).
+- **I / O** - marca Início/Fim de um trecho (na posição do evento em
+  foco).
+- **Ctrl+Shift+E** - abre a Seleção Avançada: filtra por tipo de evento,
+  faixa de número (nota/CC) e faixa de valor, dentro da pista toda ou só
+  do trecho marcado.
+- **S** - abre "Substituir Notas em Massa": escolha uma Nova Nota de
+  Referência, um Ajuste de Velocity e um Ajuste de Duração, aplicados a
+  todas as notas selecionadas (ou do trecho, ou da pista) que tenham a
+  mesma nota de origem.
+
+## Outros
+
+- **Espaço / Ctrl+Espaço** - Tocar-Parar / Pausar (mesma lógica da tela
+  principal, sincroniza o áudio guia se necessário).
+- **Ctrl+Z** - desfazer local (até 30 passos dentro da própria Lista de
+  Eventos, além do desfazer geral do programa).
+- **Ctrl+Q** - abre a Quantização (a mesma tela da seção 12.6),
+  aplicando só nos eventos selecionados.
+- **Esc** - fecha a Lista de Eventos (salvando/reconstruindo se algo foi
+  modificado).
+- **Shift+Esc** - só cancela seleções, sem fechar a tela.
+
+---
+
+# 14. Dicas de Uso e Solução de Problemas
+
+- **Se o programa não estiver falando nada**: confira se o NVDA (ou outro
+  leitor de tela compatível) está mesmo em execução antes de abrir o
+  programa. Ele detecta o leitor de tela na inicialização.
+- **Se não sai som nenhum ao tocar**: abra as Preferências (Ctrl+P), aba
+  Midi, e confirme que a porta de Saída MIDI certa está selecionada.
+- **Se notas ficarem "presas" tocando sem parar**: use F3 (Panic) para
+  desligar tudo imediatamente; se persistir, Ctrl+F3 faz um reset
+  completo do teclado.
+- **Se ao pausar/retomar o Play parecer "resetar" o som** (Drum Setup ou
+  efeitos voltando ao padrão): isso só deveria acontecer se algo foi
+  editado enquanto a música estava pausada - é esperado, porque o
+  programa precisa reconstruir o estado correto do teclado depois de uma
+  edição. Retomar sem editar nada no meio é sempre instantâneo.
+- **Se um arquivo `.mid` não abrir mais com duplo clique** depois de
+  algum tempo: outro programa pode ter retomado a associação da
+  extensão - clique com o botão direito no arquivo, "Abrir com" →
+  "Escolher outro aplicativo" → MHS MIDI Sequencer → marque "Sempre usar
+  este aplicativo".
+- **Se você editou algo e quer voltar atrás**: Ctrl+Z sempre funciona,
+  mesmo depois de aplicar quantização, humanização, Drum Setup ou
+  qualquer efeito em lote.
+- Lembre-se que **Ctrl+Shift+Espaço**, a qualquer momento, fala um resumo
+  completo do que está selecionado - útil quando você perde a noção do
+  que marcou antes de aplicar uma ferramenta em lote.

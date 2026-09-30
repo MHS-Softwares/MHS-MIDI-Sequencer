@@ -1,0 +1,26 @@
+# Builds compilados (Nuitka) - grandes demais e gerados a partir do
+# código-fonte, não precisam ficar versionados
+MHS.dist/
+MHS.build/
+MHS.onefile-build/
+*.exe
+
+# Cache do Python
+__pycache__/
+*.pyc
+
+# Configuração pessoal / dados de uso (portas MIDI, arquivos recentes,
+# pastas do seu computador) - nunca deve ir pro repositório público
+config.json
+
+# Logs e backups gerados pelo próprio programa em uso
+*.log
+.mhs_backups/
+
+# Arquivos de teste/uso pessoal, não fazem parte do projeto
+motor_novo_temp.mid
+motor_novo_teste.wav
+midi_in_log.txt
+
+# Configurações do Claude Code / assistente de IA
+.claude/

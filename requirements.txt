@@ -1,0 +1,4 @@
+wxPython
+mido
+python-rtmidi
+pygame
