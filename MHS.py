@@ -17,7 +17,7 @@ from mhs_utils import (
     REV_MSB_LIST, CHO_MSB_LIST, VARIATION_EFEITOS_LIST, DSP_PARAM_NAMES,
     OFFSETS_VAR_2BYTES, OFFSETS_VAR_1BYTE, OFFSETS_REV_PARAMS, OFFSETS_CHO_PARAMS,
     REV_PARAM_INDEX, CHO_PARAM_INDEX, DRUM_NRPN_MSBS,
-    detune_combinar, detune_separar, achar_porta_certa
+    detune_combinar, detune_separar, achar_porta_certa, verificar_nova_versao
 )
 from mhs_dialogs import (
     VelocityControlDialog, RippleEditingDialog,
@@ -25,9 +25,55 @@ from mhs_dialogs import (
     QuantizacaoOfflineDialog, QuantizacaoRealTimeDialog,
     HumanizarDialog, PreferenciasDialog, DrumSetupDialog,
     PropriedadesCanalDialog, MidiRouterDialog, SysExEditorDialog,
-    QuantizeProDialog, SysExListDialog
+    QuantizeProDialog, SysExListDialog, ChangelogDialog
 )
 from mhs_event_list import EventListDialog
+
+# Número da versão do app - um lugar só pra atualizar a cada release (título
+# da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
+VERSAO_APP = "4.1"
+
+# Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
+# usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
+# consultar a Release mais recente e comparar com VERSAO_APP.
+REPO_GITHUB = "MHS-MIDI-Sequencer"
+
+# Texto da tela de Changelog (ver mostrar_changelog_se_necessario) - mesmo
+# padrão do MHS Style Creator: embutido no código (não lido de um .txt
+# separado) porque é a PRIMEIRA coisa que o usuário vê depois de atualizar,
+# e não pode depender de um arquivo externo que talvez não tenha sido
+# empacotado junto no instalador. A cada nova versão, acrescente uma
+# entrada nova aqui.
+MENSAGEM_APOIO = (
+    "\n\n---\n\n"
+    "Se este programa está ajudando você no seu trabalho, considere uma coisa:\n\n"
+    "Ele é feito, do zero, por um músico cego - pensado pra funcionar 100% por "
+    "teclado e leitor de tela, sem depender de enxergar nada na tela. Cada "
+    "correção e cada recurso novo sai de muitas horas de trabalho voluntário, "
+    "pensando em você e em outros músicos com deficiência visual que também "
+    "precisam de uma ferramenta assim.\n\n"
+    "Se puder, considere fazer uma contribuição via Pix ou PayPal, de "
+    "qualquer valor - é um jeito simples de reconhecer esse trabalho e "
+    "ajudar a mantê-lo vivo, sempre recebendo correções e novidades.\n\n"
+    "Chave Pix / PayPal (e-mail): michel.teclado@gmail.com\n"
+    "Destinatário: Michel Henrique da Silva\n\n"
+    "Qualquer valor já faz muita diferença. Muito obrigado por usar o MHS "
+    "MIDI Sequencer!"
+)
+
+CHANGELOG_TEXTS = {
+    "4.1": (
+        "- Novo: aba \"Atualizações\" em Preferências (Ctrl+P) - caixa de "
+        "marcação \"Verificar atualizações automaticamente ao iniciar o "
+        "programa\" (ligada por padrão) e um botão \"Procurar Atualizações "
+        "Agora\", disponível sempre. Ao achar uma versão mais nova "
+        "publicada no GitHub, pergunta se quer abrir a página de "
+        "download.\n\n"
+        "- Novo: menu Ajuda, com \"Novidades desta Versão...\" (reabre esta "
+        "mesma tela sob demanda) e \"Ir para a Página do Projeto\" (abre o "
+        "repositório no GitHub no navegador)."
+    ),
+}
 
 # --- Tradução dos CC/NRPN de forma de onda que o teclado manda junto com o
 # timbre para o endereço equivalente do Multi Part (SysEx 43 10 4C 08 nn XX).
@@ -2411,7 +2457,7 @@ class MidiSequencer(wx.Frame):
         if hasattr(self, 'notebook') and self.current_tab_idx >= 0:
             self.notebook.SetPageText(self.current_tab_idx, f"{marca}{nome}")
             
-        self.SetTitle(f"{marca}{nome}{grav} - MHS MIDI Sequencer 4.0")
+        self.SetTitle(f"{marca}{nome}{grav} - MHS MIDI Sequencer {VERSAO_APP}")
 
     def checar_salvamento_guia(self):
         if not self.dirty:
@@ -2547,6 +2593,7 @@ class MidiSequencer(wx.Frame):
             pass
             
         self.config.setdefault('padrao_midi', 'XG')
+        self.config.setdefault('verificar_atualizacoes', True)
         self.config.setdefault('metro_note_down', 22)
         self.config.setdefault('metro_vel_down', 100)
         self.config.setdefault('metro_note_beat', 21)
@@ -2870,6 +2917,14 @@ class MidiSequencer(wx.Frame):
         voz_menu.Append(331, "Exportar Voz do Canal Atual (.vce, .drm, .mgv, .sar, .liv)...")
         menubar.Append(voz_menu, "Vozes")
         menubar.Append(o_menu, "Opções")
+
+        ajuda_menu = wx.Menu()
+        ajuda_menu.Append(360, "&Novidades desta Versão...")
+        ajuda_menu.Append(361, "&Ir para a Página do Projeto")
+        self.Bind(wx.EVT_MENU, self.OnMostrarNovidades, id=360)
+        self.Bind(wx.EVT_MENU, self.OnAbrirPaginaProjeto, id=361)
+        menubar.Append(ajuda_menu, "Aj&uda")
+
         self.SetMenuBar(menubar)
         
         self.Bind(wx.EVT_MENU, self.on_new_midi, id=wx.ID_NEW)
@@ -4623,10 +4678,72 @@ class MidiSequencer(wx.Frame):
                 falar_status(texto_fala, imediato=True)
     def abrir_preferencias(self, event):
         from mhs_dialogs import PreferenciasDialog
-        dlg = PreferenciasDialog(self, self.config)
+        dlg = PreferenciasDialog(self, self.config, VERSAO_APP, REPO_GITHUB)
         dlg.ShowModal()
         dlg.Destroy()
         wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
+
+    def mostrar_changelog_se_necessario(self):
+        # Chamado só pelo bloco __main__ (via wx.CallAfter), nunca de dentro
+        # do __init__ - mesmo motivo da checagem de atualização abaixo.
+        # Mostra a tela de Changelog só na PRIMEIRA vez que essa versão é
+        # aberta (guarda a marca em "changelog_versao_mostrada" no
+        # config.json) - silencioso se não houver texto cadastrado pra essa
+        # versão. Grava direto no config.json (mesmo padrão inline já usado
+        # em outros pontos deste arquivo) em vez de mexer em self.config por
+        # inteiro, pra nunca correr o risco de apagar outra chave.
+        if self.config.get("changelog_versao_mostrada") == VERSAO_APP:
+            return
+        texto = CHANGELOG_TEXTS.get(VERSAO_APP)
+        if texto:
+            dlg = ChangelogDialog(self, VERSAO_APP, texto + MENSAGEM_APOIO)
+            dlg.ShowModal()
+            dlg.Destroy()
+        self.config["changelog_versao_mostrada"] = VERSAO_APP
+        try:
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except Exception:
+            pass
+
+    def OnMostrarNovidades(self, event):
+        # Menu Ajuda > Novidades desta Versão - reexibe a MESMA tela de
+        # Changelog sob demanda, sem mexer em "changelog_versao_mostrada".
+        texto = CHANGELOG_TEXTS.get(VERSAO_APP)
+        if texto:
+            dlg = ChangelogDialog(self, VERSAO_APP, texto + MENSAGEM_APOIO)
+            dlg.ShowModal()
+            dlg.Destroy()
+        else:
+            falar_status("Nenhuma novidade cadastrada para esta versão.", imediato=True)
+
+    def OnAbrirPaginaProjeto(self, event):
+        import webbrowser
+        webbrowser.open(f"https://github.com/MHS-Softwares/{REPO_GITHUB}")
+
+    def verificar_atualizacoes_ao_iniciar(self):
+        # Chamado só pelo bloco __main__ (via wx.CallAfter), nunca de dentro
+        # do __init__ - roda em thread separada (não pode travar a abertura
+        # do programa esperando resposta de rede) e só incomoda o usuário se
+        # REALMENTE houver uma versão nova - silencioso em caso de falha de
+        # rede ou já estar atualizado (a checagem manual, pelo botão em
+        # Preferências, é que dá feedback nos dois casos).
+        if not self.config.get('verificar_atualizacoes', True):
+            return
+        threading.Thread(target=self._verificar_atualizacao_silenciosa_thread, daemon=True).start()
+
+    def _verificar_atualizacao_silenciosa_thread(self):
+        tem, versao_nova, url = verificar_nova_versao(REPO_GITHUB, VERSAO_APP)
+        if tem:
+            wx.CallAfter(self._avisar_atualizacao_disponivel, versao_nova, url)
+
+    def _avisar_atualizacao_disponivel(self, versao_nova, url):
+        resp = wx.MessageBox(
+            f"Uma nova versão do MHS MIDI Sequencer está disponível: {versao_nova} (você está usando a {VERSAO_APP}).\n\nDeseja abrir a página de download agora?",
+            "Atualização disponível", wx.YES_NO | wx.ICON_INFORMATION, self)
+        if resp == wx.YES:
+            import webbrowser
+            webbrowser.open(url)
 
     def navegar_canais(self, event):
         self.foco_inteligente = None # <--- Quebra o foco especial!
@@ -8344,5 +8461,11 @@ if __name__ == '__main__':
     # sys.argv[1] = caminho do arquivo, quando o Windows chama o programa
     # por associação de extensão (duplo clique / "Abrir com").
     arquivo_inicial = sys.argv[1] if len(sys.argv) > 1 else None
-    MidiSequencer(None, "MHS MIDI Sequencer 4.0", arquivo_inicial).Show()
+    frame = MidiSequencer(None, f"MHS MIDI Sequencer {VERSAO_APP}", arquivo_inicial)
+    frame.Show()
+    # Tela de Changelog, só na primeira vez que uma versão nova é aberta.
+    wx.CallAfter(frame.mostrar_changelog_se_necessario)
+    # Checagem de atualização (opcional, ver aba "Atualizações" em
+    # Preferências) - roda em thread e não atrasa a abertura da janela.
+    wx.CallAfter(frame.verificar_atualizacoes_ao_iniciar)
     app.MainLoop()

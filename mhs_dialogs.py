@@ -14,7 +14,7 @@ from mhs_utils import (
     REV_MSB_LIST, CHO_MSB_LIST, VARIATION_EFEITOS_LIST, DSP_PARAM_NAMES,
     DSP_LONG_PARAM_INDICES, DSP_PARAM_MAX, DSP_PARAM_OPTIONS, nomes_presets,
     OFFSETS_REV_PARAMS, OFFSETS_CHO_PARAMS, DRUM_NRPN_PARAMS, DRUM_NRPN_DEFAULTS,
-    achar_porta_certa
+    achar_porta_certa, verificar_nova_versao
 )
 
 
@@ -1018,11 +1018,36 @@ class HumanizarDialog(wx.Dialog):
         self.parent.midi_file.tracks = self.rendered_tracks
         self.parent.dirty = True
         self.parent.ler_midi_memoria(reset_canais=False)
+class ChangelogDialog(wx.Dialog):
+    # Aparece SOZINHA, uma única vez por versão nova instalada (ver
+    # mostrar_changelog_se_necessario em MHS.py) - mostra o que mudou nesta
+    # versão e, no fim, um convite pra contribuir. Texto num wx.TextCtrl
+    # multi-linha SOMENTE LEITURA (não um wx.MessageBox, que trunca texto
+    # longo e não dá pra navegar linha a linha/copiar com o NVDA) - o foco
+    # já entra direto nele, pronto pra ler com as setas. Mesmo padrão do
+    # MHS Style Creator.
+    def __init__(self, parent, versao, texto):
+        super().__init__(parent, title=f"Novidades da versão {versao}",
+                          size=(620, 520), style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        vbox.Add(wx.StaticText(self, label=f"O que mudou na versão {versao}:"), 0, wx.ALL, 10)
+        self.txt = wx.TextCtrl(self, value=texto,
+                                style=wx.TE_MULTILINE | wx.TE_READONLY | wx.TE_BESTWRAP)
+        self.txt.SetName(f"Novidades da versão {versao}")
+        vbox.Add(self.txt, 1, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        btnsizer = self.CreateButtonSizer(wx.OK)
+        vbox.Add(btnsizer, 0, wx.ALIGN_CENTER | wx.TOP | wx.BOTTOM, 12)
+        self.SetSizer(vbox)
+        wx.CallLater(150, self.txt.SetFocus)
+
+
 class PreferenciasDialog(wx.Dialog):
-    def __init__(self, parent, config_atual):
+    def __init__(self, parent, config_atual, versao_atual=None, repo_github=None):
         super().__init__(parent, title="Preferências", size=(500, 560))
         self.parent = parent
         self.config_temp = config_atual.copy()
+        self.versao_atual = versao_atual or "?"
+        self.repo_github = repo_github or "MHS-MIDI-Sequencer"
         
         self.notebook = wx.Notebook(self)
         
@@ -1181,11 +1206,26 @@ class PreferenciasDialog(wx.Dialog):
         self.btn_test.Bind(wx.EVT_BUTTON, self.on_test_metro)
 
         self.aba_metro.SetSizer(sizer_metro)
-        
+
+        # Aba de Atualizações - pedido do Michel: checagem automática opcional
+        # ao iniciar (checkbox) + botão pra checar na hora, sempre disponível
+        # independente da checkbox estar marcada ou não.
+        self.aba_atualizacoes = wx.Panel(self.notebook)
+        sizer_atualizacoes = wx.BoxSizer(wx.VERTICAL)
+        sizer_atualizacoes.Add(wx.StaticText(self.aba_atualizacoes, label=f"Versão instalada: {self.versao_atual}"), 0, wx.ALL, 10)
+        self.chk_verificar_atualizacoes = wx.CheckBox(self.aba_atualizacoes, label="&Verificar atualizações automaticamente ao iniciar o programa")
+        self.chk_verificar_atualizacoes.SetValue(self.config_temp.get('verificar_atualizacoes', True))
+        sizer_atualizacoes.Add(self.chk_verificar_atualizacoes, 0, wx.LEFT | wx.RIGHT | wx.TOP, 10)
+        self.btn_verificar_agora = wx.Button(self.aba_atualizacoes, label="&Procurar Atualizações Agora")
+        self.btn_verificar_agora.Bind(wx.EVT_BUTTON, self.on_verificar_atualizacoes_agora)
+        sizer_atualizacoes.Add(self.btn_verificar_agora, 0, wx.ALL, 10)
+        self.aba_atualizacoes.SetSizer(sizer_atualizacoes)
+
         self.notebook.AddPage(self.aba_midi, "Midi")
         self.notebook.AddPage(self.aba_pastas, "Pastas de Trabalho")
         self.notebook.AddPage(self.aba_ins, "Instrument Definitions")
         self.notebook.AddPage(self.aba_metro, "Metrônomo")
+        self.notebook.AddPage(self.aba_atualizacoes, "Atualizações")
         
         btn_add.Bind(wx.EVT_BUTTON, self.on_add)
         btn_rem.Bind(wx.EVT_BUTTON, self.on_rem)
@@ -1304,6 +1344,34 @@ class PreferenciasDialog(wx.Dialog):
         self._salvar_e_aplicar(silencioso=True)
         self.EndModal(wx.ID_OK)
 
+    def on_verificar_atualizacoes_agora(self, event):
+        self.btn_verificar_agora.Disable()
+        self.btn_verificar_agora.SetLabel("Procurando...")
+        from mhs_utils import falar_status
+        falar_status("Procurando atualizações...", imediato=True)
+        threading.Thread(target=self._checar_atualizacao_thread, daemon=True).start()
+
+    def _checar_atualizacao_thread(self):
+        tem, versao_nova, url = verificar_nova_versao(self.repo_github, self.versao_atual)
+        wx.CallAfter(self._mostrar_resultado_atualizacao, tem, versao_nova, url)
+
+    def _mostrar_resultado_atualizacao(self, tem, versao_nova, url):
+        if not self:
+            return
+        self.btn_verificar_agora.Enable()
+        self.btn_verificar_agora.SetLabel("&Procurar Atualizações Agora")
+        if versao_nova is None:
+            wx.MessageBox("Não foi possível verificar atualizações agora. Confira sua conexão com a internet.", "Atualizações", wx.OK | wx.ICON_WARNING, self)
+        elif tem:
+            resp = wx.MessageBox(
+                f"Uma nova versão está disponível: {versao_nova} (você está usando a {self.versao_atual}).\n\nDeseja abrir a página de download agora?",
+                "Atualização disponível", wx.YES_NO | wx.ICON_INFORMATION, self)
+            if resp == wx.YES:
+                import webbrowser
+                webbrowser.open(url)
+        else:
+            wx.MessageBox("Você já está com a versão mais recente.", "Atualizações", wx.OK | wx.ICON_INFORMATION, self)
+
     def _salvar_e_aplicar(self, silencioso=False):
         portas_selecionadas = [self.lista_in.GetString(i) for i in self.lista_in.GetCheckedItems()]
         novo_out = self.combo_out.GetValue()
@@ -1335,7 +1403,9 @@ class PreferenciasDialog(wx.Dialog):
         sel_ins = self.lista_ins.GetSelection()
         self.config_temp['ins_selecionado'] = sel_ins if sel_ins != wx.NOT_FOUND else 0
         self.config_temp['ins_instrumento'] = self.combo_inst.GetValue()
-        
+
+        self.config_temp['verificar_atualizacoes'] = self.chk_verificar_atualizacoes.GetValue()
+
         try:
             from mhs_utils import CONFIG_FILE
             import json
