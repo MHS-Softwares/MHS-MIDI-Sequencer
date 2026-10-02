@@ -14,7 +14,8 @@ from mhs_utils import (
     REV_MSB_LIST, CHO_MSB_LIST, VARIATION_EFEITOS_LIST, DSP_PARAM_NAMES,
     DSP_LONG_PARAM_INDICES, DSP_PARAM_MAX, DSP_PARAM_OPTIONS, nomes_presets,
     OFFSETS_REV_PARAMS, OFFSETS_CHO_PARAMS, DRUM_NRPN_PARAMS, DRUM_NRPN_DEFAULTS,
-    achar_porta_certa, verificar_nova_versao
+    achar_porta_certa, verificar_nova_versao,
+    listar_ins_online, pasta_ins_files, baixar_e_extrair_ins
 )
 
 
@@ -1018,6 +1019,113 @@ class HumanizarDialog(wx.Dialog):
         self.parent.midi_file.tracks = self.rendered_tracks
         self.parent.dirty = True
         self.parent.ler_midi_memoria(reset_canais=False)
+class BaixarInsDialog(wx.Dialog):
+    # Varre a página jososoft.dk, lista os teclados Yamaha que têm .ins
+    # disponível, e baixa/extrai o escolhido na pasta "Ins files" do
+    # programa. Ao terminar com sucesso fecha sozinha (ID_OK) devolvendo os
+    # caminhos em self.arquivos_baixados - quem abriu já adiciona/seleciona
+    # na lista de Instrumentos, só falta o usuário confirmar com OK.
+    def __init__(self, parent):
+        super().__init__(parent, title="Baixar arquivos .ins da Internet", size=(540, 480))
+        self.arquivos_baixados = []
+        self._entradas = []
+        self._ocupado = False
+
+        vbox = wx.BoxSizer(wx.VERTICAL)
+        self.lbl_status = wx.StaticText(self, label="Procurando a lista de teclados no site jososoft.dk...")
+        vbox.Add(self.lbl_status, 0, wx.ALL, 10)
+        vbox.Add(wx.StaticText(self, label="&Teclados disponíveis (digite o nome para ir direto; Tab vai ao botão Baixar):"), 0, wx.LEFT | wx.RIGHT, 10)
+        self.lista = wx.ListBox(self, style=wx.LB_SINGLE, name="Teclados disponíveis")
+        vbox.Add(self.lista, 1, wx.EXPAND | wx.ALL, 10)
+        bs = wx.BoxSizer(wx.HORIZONTAL)
+        self.btn_baixar = wx.Button(self, label="&Baixar")
+        self.btn_baixar.Disable()
+        self.btn_baixar.SetDefault()
+        self.btn_fechar = wx.Button(self, wx.ID_CANCEL, label="&Fechar")
+        bs.Add(self.btn_baixar, 0, wx.ALL, 5)
+        bs.Add(self.btn_fechar, 0, wx.ALL, 5)
+        vbox.Add(bs, 0, wx.ALIGN_CENTER | wx.BOTTOM, 10)
+        self.SetSizer(vbox)
+
+        self.btn_baixar.Bind(wx.EVT_BUTTON, self.OnBaixar)
+        self.lista.Bind(wx.EVT_LISTBOX_DCLICK, self.OnBaixar)
+        falar_status("Procurando a lista de teclados no site.", imediato=True)
+        threading.Thread(target=self._carregar_lista_thread, daemon=True).start()
+
+    def _carregar_lista_thread(self):
+        try:
+            entradas = listar_ins_online()
+        except Exception as e:
+            wx.CallAfter(self._lista_falhou, str(e))
+            return
+        wx.CallAfter(self._lista_pronta, entradas)
+
+    def _lista_falhou(self, motivo):
+        if not self:
+            return
+        msg = "Não foi possível acessar o site agora. Confira sua conexão com a internet e tente de novo."
+        self.lbl_status.SetLabel(msg)
+        falar_status(msg, imediato=True)
+
+    def _lista_pronta(self, entradas):
+        if not self:
+            return
+        self._entradas = entradas
+        self.lista.Set([f"{e['nome']} ({e['grupo']})" for e in entradas])
+        if not entradas:
+            msg = "O site respondeu, mas nenhum arquivo .ins foi encontrado."
+            self.lbl_status.SetLabel(msg)
+            falar_status(msg, imediato=True)
+            return
+        self.lista.SetSelection(0)
+        self.lista.SetFocus()
+        self.btn_baixar.Enable()
+        msg = f"{len(entradas)} teclados encontrados. Escolha o seu e aperte Enter, ou Tab até o botão Baixar."
+        self.lbl_status.SetLabel(msg)
+        falar_status(msg, imediato=True)
+
+    def OnBaixar(self, event):
+        if self._ocupado or not self._entradas:
+            return
+        sel = self.lista.GetSelection()
+        if sel == wx.NOT_FOUND:
+            falar_status("Escolha um teclado na lista primeiro.", imediato=True)
+            return
+        entrada = self._entradas[sel]
+        self._ocupado = True
+        self.btn_baixar.Disable()
+        msg = f"Baixando o arquivo de {entrada['nome']}, aguarde..."
+        self.lbl_status.SetLabel(msg)
+        falar_status(msg, imediato=True)
+        threading.Thread(target=self._baixar_thread, args=(entrada,), daemon=True).start()
+
+    def _baixar_thread(self, entrada):
+        try:
+            pasta = pasta_ins_files()
+            arquivos = baixar_e_extrair_ins(entrada['url'], pasta)
+        except Exception as e:
+            wx.CallAfter(self._baixar_falhou, entrada, str(e))
+            return
+        wx.CallAfter(self._baixar_ok, entrada, pasta, arquivos)
+
+    def _baixar_falhou(self, entrada, motivo):
+        if not self:
+            return
+        self._ocupado = False
+        self.btn_baixar.Enable()
+        msg = f"Não foi possível baixar o arquivo de {entrada['nome']}. Confira sua conexão e tente de novo."
+        self.lbl_status.SetLabel(msg)
+        falar_status(msg, imediato=True)
+
+    def _baixar_ok(self, entrada, pasta, arquivos):
+        if not self:
+            return
+        self.arquivos_baixados = arquivos
+        self._pasta = pasta
+        self._nome = entrada['nome']
+        self.EndModal(wx.ID_OK)
+
+
 class ChangelogDialog(wx.Dialog):
     # Aparece SOZINHA, uma única vez por versão nova instalada (ver
     # mostrar_changelog_se_necessario em MHS.py) - mostra o que mudou nesta
@@ -1144,8 +1252,10 @@ class PreferenciasDialog(wx.Dialog):
         btn_sizer_ins = wx.BoxSizer(wx.HORIZONTAL)
         btn_add = wx.Button(self.aba_ins, label="Adicionar .ins")
         btn_rem = wx.Button(self.aba_ins, label="Remover")
+        btn_baixar_ins = wx.Button(self.aba_ins, label="Baixar da &Internet...")
         btn_sizer_ins.Add(btn_add, 0, wx.ALL, 5)
         btn_sizer_ins.Add(btn_rem, 0, wx.ALL, 5)
+        btn_sizer_ins.Add(btn_baixar_ins, 0, wx.ALL, 5)
         sizer_ins.Add(btn_sizer_ins, 0, wx.CENTER)
         
         sizer_ins.Add(wx.StaticText(self.aba_ins, label="Instrumento do Arquivo:"), 0, wx.ALL, 5)
@@ -1229,6 +1339,7 @@ class PreferenciasDialog(wx.Dialog):
         
         btn_add.Bind(wx.EVT_BUTTON, self.on_add)
         btn_rem.Bind(wx.EVT_BUTTON, self.on_rem)
+        btn_baixar_ins.Bind(wx.EVT_BUTTON, self.on_baixar_ins)
         self.lista_ins.Bind(wx.EVT_LISTBOX, self.on_ins_selecionado)
         
         btn_sizer = wx.BoxSizer(wx.HORIZONTAL)
@@ -1537,6 +1648,26 @@ class PreferenciasDialog(wx.Dialog):
                 self.lista_ins.Append(os.path.basename(p))
                 self.lista_ins.SetSelection(self.lista_ins.GetCount()-1)
                 self.on_ins_selecionado(None)
+
+    def on_baixar_ins(self, event):
+        import os
+        dlg = BaixarInsDialog(self)
+        if dlg.ShowModal() == wx.ID_OK and dlg.arquivos_baixados:
+            if 'arquivos_ins' not in self.config_temp: self.config_temp['arquivos_ins'] = []
+            existentes = [p.lower() for p in self.config_temp['arquivos_ins']]
+            for p in dlg.arquivos_baixados:
+                if p.lower() not in existentes:
+                    self.config_temp['arquivos_ins'].append(p)
+                    self.lista_ins.Append(os.path.basename(p))
+            alvo = dlg.arquivos_baixados[0].lower()
+            idx = next((i for i, p in enumerate(self.config_temp['arquivos_ins']) if p.lower() == alvo), wx.NOT_FOUND)
+            if idx != wx.NOT_FOUND:
+                self.lista_ins.SetSelection(idx)
+                self.on_ins_selecionado(None)
+            from mhs_utils import falar_status
+            falar_status(f"Arquivo de {dlg._nome} baixado, salvo em {dlg._pasta} e já definido como instrumento. Clique em Aplicar ou Fechar para confirmar.", imediato=True)
+            self.lista_ins.SetFocus()
+        dlg.Destroy()
 
     def on_rem(self, event):
         sel = self.lista_ins.GetSelection()

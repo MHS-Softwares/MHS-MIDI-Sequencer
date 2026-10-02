@@ -31,7 +31,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.2"
+VERSAO_APP = "4.3"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -62,6 +62,20 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.3": (
+        "- Corrigido: em Efeitos MIDI (Ctrl+K), aba \"Bateria (Presets)\", "
+        "o desenho escolhido soava certinho no preview, mas ao confirmar "
+        "com Enter não entrava no MIDI (erro interno silencioso). Agora o "
+        "preset de bateria é aplicado de verdade no trecho marcado.\n\n"
+        "- Novo: botão \"Baixar da Internet...\" na aba Instrument "
+        "Definitions das Preferências (Ctrl+P). O programa procura no site "
+        "jososoft.dk a lista de teclados Yamaha que têm arquivo .ins "
+        "disponível e mostra pra você escolher o seu (dá pra digitar o nome "
+        "pra ir direto). É só apertar Enter, ou dar Tab até o botão Baixar: "
+        "o programa baixa, avisa tudo por voz, salva numa pasta chamada "
+        "\"Ins files\" ao lado do programa e já deixa o arquivo escolhido "
+        "como instrumento - só falta clicar em Aplicar ou Fechar."
+    ),
     "4.2": (
         "- Corrigido um bug no Drum Setup, aba \"Montagem de Kit\": só de "
         "ajustar o Banco/Patch/Peça Doadora de UMA peça (mesmo sem clicar "
@@ -6614,6 +6628,12 @@ class MidiSequencer(wx.Frame):
 
     def aplicar_efeito_midi(self, tipo_efeito, params, is_preview=False, backup_midi=None):
         from mhs_utils import falar_status
+        # Import no TOPO da função: há vários "import mido" locais mais
+        # abaixo (em ramos diferentes), o que torna `mido` uma variável
+        # local da função inteira - sem este, o ramo bateria_preset usava
+        # mido.Message antes de qualquer um deles rodar (UnboundLocalError:
+        # o preset soava no preview isolado mas nunca entrava no MIDI).
+        import mido
         if not self.midi_file: return
 
         if not is_preview:

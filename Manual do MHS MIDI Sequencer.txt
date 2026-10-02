@@ -693,7 +693,14 @@ Cinco abas (Ctrl+Tab navega entre elas):
 - **Pastas de Trabalho**: pasta padrão para Abrir e pasta padrão para
   Salvar arquivos MIDI.
 - **Instrument Definitions**: lista de arquivos `.ins` cadastrados (mapas
-  de nomes de instrumento/patch), com botões para Adicionar e Remover.
+  de nomes de instrumento/patch), com botões para Adicionar, Remover e
+  **Baixar da Internet...** - este último procura no site jososoft.dk os
+  teclados Yamaha que têm arquivo `.ins` disponível; escolha o seu na
+  lista (digite o nome pra ir direto) e aperte Enter (ou Tab até o botão
+  Baixar). O programa baixa, avisa tudo por voz, salva na pasta "Ins
+  files" ao lado do programa (se essa pasta não aceitar gravação, usa
+  Músicas\MHS\Ins files) e já deixa o arquivo como instrumento
+  escolhido - é só clicar em Aplicar ou Fechar.
 - **Metrônomo**: nota e volume da "cabeça" do compasso (primeiro tempo) e
   dos demais tempos, escolha de porta MIDI própria para o metrônomo
   (separada da porta principal, se quiser), volume geral, e um botão
