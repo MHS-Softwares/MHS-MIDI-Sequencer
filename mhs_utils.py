@@ -114,13 +114,13 @@ def _versao_para_tupla(texto_versao):
         partes.append(int(num) if num else 0)
     return tuple(partes)
 
-def verificar_nova_versao(repo_github, versao_atual, timeout=5):
-    # Consulta a Release mais recente do repositório no GitHub e compara com
-    # a versão instalada. Nunca lança exceção - qualquer falha (sem
-    # internet, timeout, repositório fora do ar, resposta inesperada)
-    # devolve (False, None, None), tratado por quem chamar como "não deu pra
-    # verificar agora", nunca como erro fatal.
-    # Devolve (tem_atualizacao: bool, versao_remota: str|None, url_release: str|None).
+def verificar_nova_versao_detalhado(repo_github, versao_atual, timeout=5):
+    # Consulta a Release mais recente do repositório no GitHub. Nunca lança
+    # exceção: devolve None se não deu pra consultar (sem internet, timeout,
+    # resposta inesperada) - quem chamar trata como "não deu pra verificar
+    # agora". Em caso de sucesso devolve um dict:
+    #   tem (bool), versao (str), url_pagina (str),
+    #   instalador (None ou dict nome/url/tamanho/sha256) - o .exe da Release.
     import urllib.request
     import json as _json
     url_api = f"https://api.github.com/repos/MHS-Softwares/{repo_github}/releases/latest"
@@ -130,13 +130,100 @@ def verificar_nova_versao(repo_github, versao_atual, timeout=5):
             dados = _json.loads(resp.read().decode('utf-8'))
         tag = dados.get('tag_name', '') or ''
         versao_remota = tag.lstrip('vV') or None
-        url_release = dados.get('html_url') or f"https://github.com/MHS-Softwares/{repo_github}/releases/latest"
         if versao_remota is None:
-            return False, None, None
-        tem_atualizacao = _versao_para_tupla(versao_remota) > _versao_para_tupla(versao_atual)
-        return tem_atualizacao, versao_remota, url_release
+            return None
+        url_pagina = dados.get('html_url') or f"https://github.com/MHS-Softwares/{repo_github}/releases/latest"
+        exes = [a for a in (dados.get('assets') or []) if str(a.get('name', '')).lower().endswith('.exe')]
+        escolhido = next((a for a in exes if 'instalador' in str(a.get('name', '')).lower()), exes[0] if exes else None)
+        instalador = None
+        if escolhido:
+            url_asset = escolhido.get('browser_download_url') or ''
+            # Só baixa de dentro do próprio GitHub da MHS - nunca de um
+            # endereço qualquer que apareça na resposta.
+            if url_asset.startswith("https://github.com/MHS-Softwares/"):
+                digest = str(escolhido.get('digest') or '')
+                instalador = {
+                    'nome': escolhido.get('name') or 'instalador.exe',
+                    'url': url_asset,
+                    'tamanho': int(escolhido.get('size') or 0),
+                    'sha256': digest.split(':', 1)[1].lower() if digest.lower().startswith('sha256:') else None,
+                }
+        return {
+            'tem': _versao_para_tupla(versao_remota) > _versao_para_tupla(versao_atual),
+            'versao': versao_remota,
+            'url_pagina': url_pagina,
+            'instalador': instalador,
+        }
     except Exception:
+        return None
+
+def verificar_nova_versao(repo_github, versao_atual, timeout=5):
+    # Versão enxuta (tem_atualizacao, versao_remota, url_pagina); falha de
+    # rede/resposta -> (False, None, None).
+    info = verificar_nova_versao_detalhado(repo_github, versao_atual, timeout)
+    if info is None:
         return False, None, None
+    return info['tem'], info['versao'], info['url_pagina']
+
+class DownloadCancelado(Exception):
+    pass
+
+def pasta_downloads():
+    # Pasta Downloads do usuário; se não der pra gravar nela, a pasta
+    # temporária do Windows (o instalador ainda abre de lá).
+    import tempfile
+    pasta = os.path.join(os.path.expanduser("~"), "Downloads")
+    try:
+        os.makedirs(pasta, exist_ok=True)
+        teste = os.path.join(pasta, ".teste_escrita_mhs")
+        with open(teste, "w") as f:
+            f.write("ok")
+        os.remove(teste)
+        return pasta
+    except Exception:
+        return tempfile.gettempdir()
+
+def baixar_arquivo(url, destino, progresso=None, cancelar=None, sha256_esperado=None, timeout=30, bloco=64 * 1024):
+    # Baixa pra "destino.part" e só renomeia no fim (nunca deixa um arquivo
+    # pela metade com o nome certo). progresso(baixado, total_ou_0);
+    # cancelar = threading.Event. Confere o SHA-256 quando ele é informado.
+    # Levanta DownloadCancelado se cancelado, ValueError se o arquivo veio
+    # incompleto/corrompido, e as exceções de rede normais.
+    import urllib.request
+    import hashlib
+    pasta = os.path.dirname(destino)
+    if pasta:
+        os.makedirs(pasta, exist_ok=True)
+    parcial = destino + ".part"
+    sha = hashlib.sha256()
+    feito = 0
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "MHS-App-Update", "Accept": "application/octet-stream"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp, open(parcial, "wb") as f:
+            total = int(resp.headers.get("Content-Length") or 0)
+            while True:
+                if cancelar is not None and cancelar.is_set():
+                    raise DownloadCancelado()
+                dados = resp.read(bloco)
+                if not dados:
+                    break
+                f.write(dados)
+                sha.update(dados)
+                feito += len(dados)
+                if progresso:
+                    progresso(feito, total)
+            if total and feito != total:
+                raise ValueError("O download veio incompleto.")
+        if sha256_esperado and sha.hexdigest().lower() != sha256_esperado.lower():
+            raise ValueError("O arquivo baixado não confere com o original (SHA-256 diferente).")
+    except BaseException:
+        try:
+            os.remove(parcial)
+        except OSError:
+            pass
+        raise
+    os.replace(parcial, destino)
+    return destino
 
 # --- Download de arquivos .ins (Instrument Definition Files) ---
 # Fonte: página do Jørgen Sørensen (jososoft.dk), que reúne os .ins de quase
@@ -229,6 +316,17 @@ def baixar_e_extrair_ins(url, pasta_destino, timeout=60):
     if not gravados:
         raise ValueError("O arquivo baixado não contém nenhum .ins.")
     return gravados
+
+def copiar_com_tempo(msg, tempo):
+    # Cópia de uma mensagem MIDI com outro "time" (delta). msg.copy(time=x)
+    # faz o mido revalidar a mensagem INTEIRA (~7,5 us cada, medido); copy()
+    # sem argumentos é ~0,6 us, e atribuir só o time valida só ele - mesmo
+    # resultado, mesma checagem do valor, mais de 10x mais rápido. Importa
+    # porque salvar/consolidar/editar reconstrói a trilha inteira (dezenas
+    # de milhares de mensagens) com uma dessas cópias por mensagem.
+    nova = msg.copy()
+    nova.time = tempo
+    return nova
 
 # --- UTILITÁRIOS: CONVERSORES DE NOMES MIDI ---
 def get_nome_nota(nota_num):

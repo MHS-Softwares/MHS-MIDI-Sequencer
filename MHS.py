@@ -17,7 +17,8 @@ from mhs_utils import (
     REV_MSB_LIST, CHO_MSB_LIST, VARIATION_EFEITOS_LIST, DSP_PARAM_NAMES,
     OFFSETS_VAR_2BYTES, OFFSETS_VAR_1BYTE, OFFSETS_REV_PARAMS, OFFSETS_CHO_PARAMS,
     REV_PARAM_INDEX, CHO_PARAM_INDEX, DRUM_NRPN_MSBS,
-    detune_combinar, detune_separar, achar_porta_certa, verificar_nova_versao
+    detune_combinar, detune_separar, achar_porta_certa, verificar_nova_versao, verificar_nova_versao_detalhado,
+    copiar_com_tempo
 )
 from mhs_dialogs import (
     VelocityControlDialog, RippleEditingDialog,
@@ -25,13 +26,13 @@ from mhs_dialogs import (
     QuantizacaoOfflineDialog, QuantizacaoRealTimeDialog,
     HumanizarDialog, PreferenciasDialog, DrumSetupDialog,
     PropriedadesCanalDialog, MidiRouterDialog, SysExEditorDialog,
-    QuantizeProDialog, SysExListDialog, ChangelogDialog
+    QuantizeProDialog, SysExListDialog, ChangelogDialog, oferecer_atualizacao
 )
 from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.3"
+VERSAO_APP = "4.4"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -62,6 +63,20 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.4": (
+        "- Novo: a janela de atualização agora baixa o instalador da "
+        "nova versão direto por ela, sem abrir página nenhuma. O botão "
+        "\"Baixar e instalar\" avisa o progresso por voz, confere a "
+        "integridade do arquivo e, ao terminar, pergunta se você quer "
+        "instalar agora (o programa pergunta se quer salvar o que "
+        "estiver aberto, fecha e abre o instalador). Se preferir não "
+        "instalar na hora, o arquivo fica na sua pasta Downloads.\n\n"
+        "- Mais rápido: abrir um MIDI ficou cerca de 35% mais rápido, "
+        "salvar/consolidar o projeto ficou quase 3 vezes mais rápido, e o "
+        "Desfazer (e o preview dos efeitos) ficou cerca de 7 vezes mais "
+        "rápido num MIDI grande - o programa fazia validações repetidas, "
+        "mensagem por mensagem, que não eram necessárias."
+    ),
     "4.3": (
         "- Corrigido: em Efeitos MIDI (Ctrl+K), aba \"Bateria (Presets)\", "
         "o desenho escolhido soava certinho no preview, mas ao confirmar "
@@ -645,8 +660,12 @@ class MidiSequencer(wx.Frame):
         import copy
         new_mid = mido.MidiFile(type=mid.type)
         new_mid.ticks_per_beat = getattr(mid, 'ticks_per_beat', 480)
-        # OTIMIZAÇÃO EXTREMA: Deixa o motor em C do Python clonar a memória das trilhas de uma vez
-        new_mid.tracks = copy.deepcopy(mid.tracks)
+        # Uma cópia simples por mensagem (copy() sem argumentos, ~0,6 us) em
+        # vez de copy.deepcopy das trilhas: medido num MIDI de 39 mil
+        # mensagens, 32 ms contra 269 ms - e isto roda a cada "desfazer",
+        # a cada preview de efeito e a cada edição na Lista de Eventos. As
+        # cópias saem independentes e do mesmo tipo (MidiTrack/Message).
+        new_mid.tracks = [mido.MidiTrack([m.copy() for m in trilha]) for trilha in mid.tracks]
         return new_mid
     def enviar_ambientacao_completa(self):
         if not self.output or not hasattr(self, 'dsp_cache'): return
@@ -2202,7 +2221,7 @@ class MidiSequencer(wx.Frame):
             msg_removida = track_0.pop(idx_to_remove)
             # Acopla a duração do evento apagado no próximo evento para não descincronizar a música!
             if idx_to_remove < len(track_0):
-                track_0[idx_to_remove] = track_0[idx_to_remove].copy(time=track_0[idx_to_remove].time + msg_removida.time)
+                track_0[idx_to_remove] = copiar_com_tempo(track_0[idx_to_remove], track_0[idx_to_remove].time + msg_removida.time)
                 
             self.dirty = True
             self.atualizar_titulo()
@@ -2435,7 +2454,7 @@ class MidiSequencer(wx.Frame):
             
             # Repassa o tempo delta da figura apagada para o próximo evento (Para não engolir o tempo da música!)
             if alvo_idx < len(track_0):
-                track_0[alvo_idx] = track_0[alvo_idx].copy(time=track_0[alvo_idx].time + msg_removida.time)
+                track_0[alvo_idx] = copiar_com_tempo(track_0[alvo_idx], track_0[alvo_idx].time + msg_removida.time)
                 
             self.dirty = True
             self.atualizar_titulo()
@@ -3317,7 +3336,7 @@ class MidiSequencer(wx.Frame):
         last_tick = 0
         for tick, msg in abs_events:
             delta = max(0, tick - last_tick)
-            new_track.append(msg.copy(time=delta))
+            new_track.append(copiar_com_tempo(msg, delta))
             last_tick = tick
             
         self.midi_file.tracks[track_idx] = new_track
@@ -4456,7 +4475,7 @@ class MidiSequencer(wx.Frame):
         last_tick = 0
         for tick, msg in abs_ticks_list:
             tick_int = int(tick) 
-            new_track.append(msg.copy(time=max(0, tick_int - last_tick)))
+            new_track.append(copiar_com_tempo(msg, max(0, tick_int - last_tick)))
             last_tick = tick_int
             
         self.midi_file.tracks.append(new_track)
@@ -4761,17 +4780,14 @@ class MidiSequencer(wx.Frame):
         threading.Thread(target=self._verificar_atualizacao_silenciosa_thread, daemon=True).start()
 
     def _verificar_atualizacao_silenciosa_thread(self):
-        tem, versao_nova, url = verificar_nova_versao(REPO_GITHUB, VERSAO_APP)
-        if tem:
-            wx.CallAfter(self._avisar_atualizacao_disponivel, versao_nova, url)
+        info = verificar_nova_versao_detalhado(REPO_GITHUB, VERSAO_APP)
+        if info and info['tem']:
+            wx.CallAfter(self._avisar_atualizacao_disponivel, info)
 
-    def _avisar_atualizacao_disponivel(self, versao_nova, url):
-        resp = wx.MessageBox(
-            f"Uma nova versão do MHS MIDI Sequencer está disponível: {versao_nova} (você está usando a {VERSAO_APP}).\n\nDeseja abrir a página de download agora?",
-            "Atualização disponível", wx.YES_NO | wx.ICON_INFORMATION, self)
-        if resp == wx.YES:
-            import webbrowser
-            webbrowser.open(url)
+    def _avisar_atualizacao_disponivel(self, info):
+        # Janela de atualização: baixa o instalador direto daqui e, ao fim,
+        # oferece instalar na hora (fecha o programa e abre o instalador).
+        oferecer_atualizacao(self, self, "MHS MIDI Sequencer", info['versao'], VERSAO_APP, info['url_pagina'], info['instalador'])
 
     def navegar_canais(self, event):
         self.foco_inteligente = None # <--- Quebra o foco especial!
@@ -5093,7 +5109,7 @@ class MidiSequencer(wx.Frame):
         last_tick = 0
         for tick, msg in abs_events:
             delta = max(0, tick - last_tick)
-            new_track.append(msg.copy(time=delta))
+            new_track.append(copiar_com_tempo(msg, delta))
             last_tick = tick
             
         self.midi_file.tracks[track_idx] = new_track
@@ -5184,7 +5200,7 @@ class MidiSequencer(wx.Frame):
                 new_track = mido.MidiTrack()
                 curr = 0
                 for t, m in flat:
-                    new_track.append(m.copy(time=t - curr))
+                    new_track.append(copiar_com_tempo(m, t - curr))
                     curr = t
                 self.midi_file.tracks[i] = new_track
 
@@ -5396,14 +5412,14 @@ class MidiSequencer(wx.Frame):
             current_abs += msg.time
             abs_events.append([current_abs, msg])
             
-        abs_events.insert(0, [0, sysex_msg.copy(time=0)])
+        abs_events.insert(0, [0, copiar_com_tempo(sysex_msg, 0)])
         abs_events.sort(key=lambda x: x[0])
         
         new_track = mido.MidiTrack()
         last_tick = 0
         for tick, msg in abs_events:
             delta = max(0, int(round(tick - last_tick)))
-            new_track.append(msg.copy(time=delta))
+            new_track.append(copiar_com_tempo(msg, delta))
             last_tick = tick
             
         self.midi_file.tracks[0] = new_track
@@ -5485,7 +5501,7 @@ class MidiSequencer(wx.Frame):
             last_tick = 0
             for tick, msg in abs_events:
                 delta = max(0, tick - last_tick)
-                new_track.append(msg.copy(time=delta))
+                new_track.append(copiar_com_tempo(msg, delta))
                 last_tick = tick
                 
             self.midi_file.tracks[track_idx] = new_track
@@ -5567,11 +5583,11 @@ class MidiSequencer(wx.Frame):
                         continue
                     vistos.add(abs_t)
                 if carry:
-                    msg = msg.copy(time=msg.time + carry)
+                    msg = copiar_com_tempo(msg, msg.time + carry)
                     carry = 0
                 novo.append(msg)
             if carry and novo:
-                novo[-1] = novo[-1].copy(time=novo[-1].time + carry)
+                novo[-1] = copiar_com_tempo(novo[-1], novo[-1].time + carry)
             track[:] = novo
 
     def _definir_bpm_global(self, bpm):
@@ -5600,11 +5616,11 @@ class MidiSequencer(wx.Frame):
                     carry += msg.time
                     continue
                 if carry:
-                    msg = msg.copy(time=msg.time + carry)
+                    msg = copiar_com_tempo(msg, msg.time + carry)
                     carry = 0
                 novo.append(msg)
             if carry and novo:
-                novo[-1] = novo[-1].copy(time=novo[-1].time + carry)
+                novo[-1] = copiar_com_tempo(novo[-1], novo[-1].time + carry)
             track[:] = novo
         # Um único set_tempo no início da trilha mestre.
         self.midi_file.tracks[0].insert(0, mido.MetaMessage('set_tempo', tempo=self.current_tempo, time=0))
@@ -7606,7 +7622,7 @@ class MidiSequencer(wx.Frame):
         meta_events.sort(key=lambda x: x[0])
         last_t = 0
         for tick, msg in meta_events:
-            tr0.append(msg.copy(time=max(0, tick - last_t)))
+            tr0.append(copiar_com_tempo(msg, max(0, tick - last_t)))
             last_t = tick
         novo_mid.tracks.append(tr0)
 
@@ -7685,7 +7701,7 @@ class MidiSequencer(wx.Frame):
             channel_events[ch].sort(key=lambda x: x[0])
             last_tc = 0
             for tick, msg in channel_events[ch]:
-                tr.append(msg.copy(time=max(0, tick - last_tc)))
+                tr.append(copiar_com_tempo(msg, max(0, tick - last_tc)))
                 last_tc = tick
             novo_mid.tracks.append(tr)
             
@@ -7716,7 +7732,7 @@ class MidiSequencer(wx.Frame):
             
             # Dá um tempo de 120 ticks (~50ms) no próximo evento para o Yamaha conseguir "respirar"
             if len(track_0) > 1:
-                track_0[1] = track_0[1].copy(time=track_0[1].time + 120)
+                track_0[1] = copiar_com_tempo(track_0[1], track_0[1].time + 120)
     def on_paste_repeat(self, event):
         from mhs_utils import falar_status
         if not getattr(self, 'event_clipboard', []):
@@ -7911,7 +7927,7 @@ class MidiSequencer(wx.Frame):
                 last_t = 0
                 for t, msg in flat:
                     delta = max(0, t - last_t)
-                    new_track.append(msg.copy(time=delta))
+                    new_track.append(copiar_com_tempo(msg, delta))
                     last_t = t
                 self.midi_file.tracks[i] = new_track
                 
