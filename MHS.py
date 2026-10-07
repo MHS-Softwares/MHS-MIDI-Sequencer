@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.4"
+VERSAO_APP = "4.5"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,15 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.5": (
+        "- Corrigido: o instalador baixado pela janela de atualização "
+        "agora é salvo na pasta Downloads que o Windows informa, e não "
+        "numa pasta Downloads presumida dentro da pasta do usuário. Se "
+        "você mudou o local da pasta Downloads (OneDrive, outra "
+        "partição, outro disco), o arquivo antes ia parar num lugar onde "
+        "você não procurava e a instalação não abria; agora vai para a "
+        "sua pasta Downloads de verdade."
+    ),
     "4.4": (
         "- Novo: a janela de atualização agora baixa o instalador da "
         "nova versão direto por ela, sem abrir página nenhuma. O botão "
