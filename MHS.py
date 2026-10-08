@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.5"
+VERSAO_APP = "4.5.1"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,16 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.5.1": (
+        "- Corrigido: depois de baixar a atualização pela janela de "
+        "atualização, ao responder Sim em \"Deseja instalar agora?\" o "
+        "programa fechava mas o instalador não abria (o arquivo ficava "
+        "só na pasta Downloads). Agora o instalador abre de verdade. "
+        "Se você recusar fechar o programa (por exemplo no \"salvar "
+        "antes de sair\"), nada é instalado, como antes."
+        "\n\n- Mesmo defeito achado pelo Gabriel Schuck "
+        "(@gabrielschuck) no MHS Style Creator."
+    ),
     "4.5": (
         "- Corrigido: o instalador baixado pela janela de atualização "
         "agora é salvo na pasta Downloads que o Windows informa, e não "
