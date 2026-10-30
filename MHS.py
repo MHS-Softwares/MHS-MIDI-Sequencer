@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.5.1"
+VERSAO_APP = "4.6"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,19 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.6": (
+        "- Novo: Navegação por compasso e beat com duas opções, em "
+        "Preferências > Navegação. O padrão continua sendo cair sempre na "
+        "cabeça do compasso ou do beat (Page Up e Page Down andam por "
+        "compassos, Ctrl+Page Up e Ctrl+Page Down por beats). A segunda "
+        "opção funciona como no Reaper: parte da âncora (para onde o Stop "
+        "volta) e mantém a posição dentro do compasso e do beat. Ancorado "
+        "no compasso 1, beat 2, tick 500, o Page Down vai ao compasso 2, "
+        "beat 2, tick 500, e o Ctrl+Page Down ao beat 3, tick 500. A cada "
+        "movimento o cursor reancora no novo lugar, e o programa fala o "
+        "compasso, o beat e o tick. A escolha fica guardada no "
+        "config.json."
+    ),
     "4.5.1": (
         "- Corrigido: depois de baixar a atualização pela janela de "
         "atualização, ao responder Sim em \"Deseja instalar agora?\" o "
@@ -8041,9 +8054,112 @@ class MidiSequencer(wx.Frame):
         # O programa aguarda 400ms após o ÚLTIMO toque para processar tudo com precisão
         self.nudge_timer.Start(400, wx.TIMER_ONE_SHOT)
 
+    def _destino_relativo(self, eid, base):
+        """Page Up/Page Down (110/111) e Ctrl+Page Up/Page Down (112/113) "como no Reaper": a partir da posição `base` (a âncora),
+        vai para o compasso (ou beat) vizinho MANTENDO a posição dentro dele, em ticks (compasso 1, beat 2, tick 500 -> compasso 2,
+        beat 2, tick 500). Devolve os segundos do destino, ou None se não há compasso/beat nessa direção."""
+        beats = self.beat_events
+        n = len(beats)
+        if not n:
+            return None
+        idx = 0
+        for i, (t, _d) in enumerate(beats):
+            if t <= base + 0.005:
+                idx = i
+            else:
+                break
+        tick_base = self.get_tick_at_sec(base)
+
+        def tk(i):
+            return self.get_tick_at_sec(beats[i][0])
+
+        def proxima_cabeca(c):
+            j = c + 1
+            while j < n and not beats[j][1]:
+                j += 1
+            return j
+
+        if eid in (110, 111):
+            cab = idx
+            while cab > 0 and not beats[cab][1]:
+                cab -= 1
+            if eid == 110:
+                if cab == 0:
+                    return beats[0][0]
+                alvo = cab - 1
+                while alvo > 0 and not beats[alvo][1]:
+                    alvo -= 1
+            else:
+                alvo = proxima_cabeca(cab)
+                if alvo >= n:
+                    return None
+            desloc = max(0, tick_base - tk(cab))
+            fim_alvo = proxima_cabeca(alvo)
+            fim_cab = proxima_cabeca(cab)
+            if fim_alvo < n:
+                compr = tk(fim_alvo) - tk(alvo)
+            elif fim_cab < n:
+                compr = tk(fim_cab) - tk(cab)
+            else:
+                compr = None
+            if compr is not None:
+                desloc = min(desloc, max(0, compr - 1))
+            return self.get_sec_at_tick(tk(alvo) + desloc)
+
+        desloc = max(0, tick_base - tk(idx))
+        if eid == 112:
+            if idx == 0:
+                return beats[0][0]
+            alvo = idx - 1
+        else:
+            alvo = idx + 1
+            if alvo >= n:
+                return None
+        if alvo + 1 < n:
+            compr = tk(alvo + 1) - tk(alvo)
+        elif idx + 1 < n:
+            compr = tk(idx + 1) - tk(idx)
+        else:
+            compr = None
+        if compr is not None:
+            desloc = min(desloc, max(0, compr - 1))
+        return self.get_sec_at_tick(tk(alvo) + desloc)
+
+    def _posicao_musical(self, segundos):
+        """(compasso, beat, ticks dentro do beat) da posição, contando de 1."""
+        beats = self.beat_events
+        if not beats:
+            return 1, 1, 0
+        idx = 0
+        for i, (t, _d) in enumerate(beats):
+            if t <= segundos + 0.005:
+                idx = i
+            else:
+                break
+        compasso, tempo = 1, 1
+        for i in range(1, idx + 1):
+            if beats[i][1]:
+                compasso += 1
+                tempo = 1
+            else:
+                tempo += 1
+        ticks = max(0, self.get_tick_at_sec(segundos) - self.get_tick_at_sec(beats[idx][0]))
+        return compasso, tempo, ticks
+
     def buscar_posicao(self, event):
         self.foco_inteligente = None
         eid = event.GetId()
+        # Navegação "como o Reaper" (Preferências > Navegação): parte da ÂNCORA (last_start_time, para onde o Stop volta) e mantém a
+        # posição dentro do compasso/beat. O padrão ("cabeca") cai sempre na cabeça do compasso/beat, a partir de onde se está.
+        relativa = eid in (110, 111, 112, 113) and self.config.get('navegacao_compasso', 'cabeca') == 'relativa'
+        destino_relativo = None
+        if relativa:
+            base_rel = self.last_start_time if self.tocando else self.current_playback_time
+            destino_relativo = self._destino_relativo(eid, base_rel)
+            if destino_relativo is None:
+                from mhs_utils import falar_status
+                falar_status("Último compasso." if eid in (110, 111) else "Último tempo.", imediato=True)
+                return
         self.all_notes_off() 
         
         msg_type = ""
@@ -8096,6 +8212,9 @@ class MidiSequencer(wx.Frame):
             novo_tempo = self.total_time
             msg_type = "fim"
             
+        if relativa:
+            novo_tempo = destino_relativo
+            msg_type = "compasso" if eid in (110, 111) else "tempo"
         virtual_max = getattr(self, 'virtual_total_time', self.total_time + 3600.0)
         self.current_playback_time = max(0.0, min(virtual_max, novo_tempo))
         self.last_start_time = self.current_playback_time
@@ -8118,7 +8237,10 @@ class MidiSequencer(wx.Frame):
                 break
                 
         texto = ""
-        if msg_type == "compasso":
+        if relativa:
+            comp_r, tempo_r, ticks_r = self._posicao_musical(self.current_playback_time)
+            texto = f"Compasso {comp_r}, Tempo {tempo_r}" + (f", tick {ticks_r}" if ticks_r else "")
+        elif msg_type == "compasso":
             texto = f"Compasso {compasso_count}"
         elif msg_type == "tempo":
             if tempo_count == 1: texto = f"Compasso {compasso_count}, Tempo 1"

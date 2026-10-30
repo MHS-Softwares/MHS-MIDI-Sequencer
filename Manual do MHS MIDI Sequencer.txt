@@ -267,6 +267,9 @@ trabalham sobre um trecho específico da música, marcado por dois pontos:
 - **Ctrl+End** - vai para o fim da música.
 - **Page Up / Page Down** - vai ao compasso anterior/próximo.
 - **Ctrl+Page Up / Ctrl+Page Down** - vai ao tempo (beat) anterior/próximo.
+  (Por padrão o cursor cai na cabeça do compasso/beat; em Preferências >
+  Navegação dá para escolher o modo "como o Reaper", que parte da âncora
+  e mantém o beat e o tick - ver seção 12.14.)
 - **Ctrl+F** - digitar um número de compasso para ir direto até ele.
 - **Ctrl+Shift+T** - abre uma caixa para digitar o BPM com casas decimais.
 - **T** - Tap Tempo: bata o ritmo (aperte a tecla T no compasso) para
@@ -685,7 +688,7 @@ Ver seção 12.5 (mesma tela, acessível também pela tecla Menu/Aplicativo).
 
 ## 12.14 Preferências (Ctrl+P)
 
-Cinco abas (Ctrl+Tab navega entre elas):
+Seis abas (Ctrl+Tab navega entre elas):
 
 - **Midi**: lista de Entradas MIDI (pode marcar mais de uma - o programa
   escuta todas ao mesmo tempo), escolha da Saída MIDI, e o Padrão de
@@ -705,6 +708,17 @@ Cinco abas (Ctrl+Tab navega entre elas):
   dos demais tempos, escolha de porta MIDI própria para o metrônomo
   (separada da porta principal, se quiser), volume geral, e um botão
   "Testar Metrônomo (120 BPM)".
+- **Navegação**: Page Up e Page Down andam por compassos, Ctrl+Page Up e
+  Ctrl+Page Down por beats. Por padrão o cursor cai sempre na cabeça do
+  compasso ou do beat. A segunda opção ("Mantendo a posição dentro do
+  compasso e do beat, a partir da âncora") funciona como no Reaper:
+  parte da âncora (para onde o Stop volta) e mantém a posição dentro do
+  compasso e do beat; ancorado no compasso 1, beat 2, tick 500, o Page
+  Down vai ao compasso 2, beat 2, tick 500, e o Ctrl+Page Down ao beat
+  3, tick 500. A cada movimento o cursor reancora no novo lugar, e o
+  programa fala o compasso, o beat e o tick. Se não há mais compasso (ou
+  beat) adiante, ele avisa e não sai do lugar. A escolha fica guardada
+  no config.json.
 - **Atualizações**: mostra a versão instalada, uma caixa de marcação
   "Verificar atualizações automaticamente ao iniciar o programa" (marcada
   por padrão) e o botão "Procurar Atualizações Agora" (disponível sempre,

@@ -1525,7 +1525,21 @@ class PreferenciasDialog(wx.Dialog):
         self.notebook.AddPage(self.aba_midi, "Midi")
         self.notebook.AddPage(self.aba_pastas, "Pastas de Trabalho")
         self.notebook.AddPage(self.aba_ins, "Instrument Definitions")
+        # Aba de Navegação: como Page Up/Page Down (compasso) e Ctrl+Page Up/Page Down (beat) andam.
+        self.aba_navegacao = wx.Panel(self.notebook)
+        sizer_nav = wx.BoxSizer(wx.VERTICAL)
+        sizer_nav.Add(wx.StaticText(self.aba_navegacao, label="Page Up e Page Down (compasso), Ctrl+Page Up e Ctrl+Page Down (beat):"), 0, wx.ALL, 10)
+        self.combo_navegacao = wx.Choice(self.aba_navegacao, choices=[
+            "Na cabeça do compasso ou do beat (padrão)",
+            "Mantendo a posição dentro do compasso e do beat, a partir da âncora (como o Reaper)"], name="Navegação por compasso e beat")
+        self.combo_navegacao.SetSelection(1 if self.config_temp.get('navegacao_compasso', 'cabeca') == 'relativa' else 0)
+        sizer_nav.Add(self.combo_navegacao, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        sizer_nav.Add(wx.StaticText(self.aba_navegacao, label="Na segunda opção, estando ancorado no compasso 1, beat 2, tick 500, o Page Down vai ao compasso 2, "
+                                                                 "beat 2, tick 500; o Ctrl+Page Down vai ao beat 3, tick 500. A âncora é para onde o Stop volta."), 0, wx.ALL, 10)
+        self.aba_navegacao.SetSizer(sizer_nav)
+
         self.notebook.AddPage(self.aba_metro, "Metrônomo")
+        self.notebook.AddPage(self.aba_navegacao, "Navegação")
         self.notebook.AddPage(self.aba_atualizacoes, "Atualizações")
         
         btn_add.Bind(wx.EVT_BUTTON, self.on_add)
@@ -1705,6 +1719,7 @@ class PreferenciasDialog(wx.Dialog):
         self.config_temp['ins_instrumento'] = self.combo_inst.GetValue()
 
         self.config_temp['verificar_atualizacoes'] = self.chk_verificar_atualizacoes.GetValue()
+        self.config_temp['navegacao_compasso'] = 'relativa' if self.combo_navegacao.GetSelection() == 1 else 'cabeca'
 
         try:
             from mhs_utils import CONFIG_FILE
