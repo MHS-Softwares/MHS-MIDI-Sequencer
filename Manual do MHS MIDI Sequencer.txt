@@ -260,8 +260,12 @@ trabalham sobre um trecho específico da música, marcado por dois pontos:
 - **Ctrl+Shift+R** - configura um Pré-roll: quantos compassos de contagem
   tocar (com metrônomo) antes da gravação realmente começar.
 - **F3** - Panic: desliga todas as notas presas imediatamente.
-- **Ctrl+F3** - Reset Geral do teclado (reset completo via SysEx + todas
-  as notas desligadas).
+- **Ctrl+F3** - Reset Geral do teclado (GM e XG System On via SysEx, todas
+  as notas desligadas e controladores zerados). Se estava tocando, a
+  reprodução para; depois do reset o programa manda de novo ao teclado o
+  projeto aberto (efeitos globais e os timbres, volumes e ajustes dos
+  canais na posição atual) e o Som do Teclado (Local Control) volta ao
+  estado em que estava.
 - **Ctrl+M** - Liga/desliga o metrônomo.
 - **W** ou **Ctrl+Home** - vai para o início da música.
 - **Ctrl+End** - vai para o fim da música.

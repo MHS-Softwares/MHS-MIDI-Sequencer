@@ -74,7 +74,15 @@ CHANGELOG_TEXTS = {
         "beat 2, tick 500, e o Ctrl+Page Down ao beat 3, tick 500. A cada "
         "movimento o cursor reancora no novo lugar, e o programa fala o "
         "compasso, o beat e o tick. A escolha fica guardada no "
-        "config.json."
+        "config.json.\n\n"
+        "- Alterado: Reset Geral do Teclado (Ctrl+F3): além do GM e do XG "
+        "System On, das notas desligadas e dos controladores zerados, o "
+        "programa agora para a reprodução se ela estiver tocando e manda "
+        "de novo ao teclado o que o projeto aberto tem (os efeitos "
+        "globais e os timbres, volumes e ajustes dos canais na posição "
+        "atual), e o Som do Teclado (Local Control) volta ao estado em "
+        "que estava. Antes o teclado ficava zerado, sem os timbres do "
+        "projeto."
     ),
     "4.5.1": (
         "- Corrigido: depois de baixar a atualização pela janela de "
@@ -3095,10 +3103,27 @@ class MidiSequencer(wx.Frame):
         from mhs_utils import falar_status
         falar_status("Panic. Todas as notas desligadas.", imediato=True)
 
-    def reset_geral_teclado(self, event):
-        self.enviar_reset_fisico_teclado()
+    def reset_geral_teclado(self, event=None):
+        # Ctrl+F3: GM/XG System On, notas desligadas e controladores zerados. Como o reset apaga também os timbres e os ajustes do
+        # que está aberto, o programa os manda de novo (os efeitos globais e o estado da posição atual, como ao dar Play), e o
+        # Local Control volta ao estado em que estava.
         from mhs_utils import falar_status
-        falar_status("Reset Geral enviado! O teclado foi completamente zerado.", imediato=True)
+        if not getattr(self, 'output', None):
+            falar_status("Nenhuma porta MIDI de saída aberta.", imediato=True)
+            return
+        if self.tocando:
+            self.toggle_reproducao(None)
+        self.enviar_reset_fisico_teclado()
+        self.set_local_control(getattr(self, 'local_control_on', True))
+        com_projeto = bool(getattr(self, 'midi_file', None) and getattr(self, 'canais', None))
+        if com_projeto:
+            try:
+                self.enviar_ambientacao_completa()
+                self.enviar_variation_dsp_completo()
+                self.aplicar_chase_seguro()
+            except Exception:
+                pass
+        falar_status("Teclado resetado." + (" Projeto enviado de novo." if com_projeto else ""), imediato=True)
     def setup_shortcuts(self):
         entries = [
             (wx.ACCEL_NORMAL, wx.WXK_UP, 101), (wx.ACCEL_NORMAL, wx.WXK_DOWN, 102),
@@ -3261,19 +3286,7 @@ class MidiSequencer(wx.Frame):
         falar_status("Notas desligadas", imediato=True)
 
     def on_ctrl_f3_reset(self, event):
-        if getattr(self, 'output', None):
-            import mido
-            import time
-            try:
-                self.output.send(mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, 0x00, 0x00, 0x7E, 0x00, 0xF7]))
-                time.sleep(0.05)
-            except: pass
-            
-            if hasattr(self, 'all_notes_off'):
-                self.all_notes_off()
-                
-        from mhs_utils import falar_status
-        falar_status("Teclado resetado", imediato=True)
+        self.reset_geral_teclado(event)
     def on_next_tab(self, event):
         total = self.notebook.GetPageCount()
         if total > 1:
