@@ -148,7 +148,11 @@ def decodificar(caminho, taxa=TAXA):
     """O arquivo inteiro (WAV, MP3, OGG ou FLAC) como PCM de 16 bits estéreo na taxa pedida, em bytes. Levanta se não conseguir."""
     if miniaudio is None:
         raise RuntimeError("a biblioteca miniaudio não está instalada")
-    d = miniaudio.decode_file(caminho, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=2, sample_rate=int(taxa))
+    # O arquivo é lido aqui e entregue em bytes: o decode_file do miniaudio abre o caminho pela página de código do Windows e falha
+    # (erro -7) em nomes com acento, como "Se não tivesse ido.mp3".
+    with open(caminho, 'rb') as f:
+        dados = f.read()
+    d = miniaudio.decode(dados, output_format=miniaudio.SampleFormat.SIGNED16, nchannels=2, sample_rate=int(taxa))
     return d.samples.tobytes()
 
 

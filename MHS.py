@@ -859,8 +859,13 @@ class MidiSequencer(wx.Frame):
             return
         try:
             self._audio_decoded = guia.carregar(caminho)         # duração em segundos
-        except Exception:
+        except Exception as e:
             self._audio_decoded = None
+            try:
+                from mhs_utils import falar_status
+                falar_status(f"Não consegui abrir este áudio. {str(e)[:120]}", imediato=True)
+            except Exception:
+                pass
         self._apply_audio_vol()
 
     def _audio_stop(self):

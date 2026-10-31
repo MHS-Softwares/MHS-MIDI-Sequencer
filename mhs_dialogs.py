@@ -3101,7 +3101,8 @@ class AudioGuiaDialog(wx.Dialog):
                     self.parent.seek_flag = True
                     
                 from mhs_utils import falar_status
-                falar_status("Áudio cravado na posição do cursor. Pressione espaço para testar.", imediato=True)
+                if getattr(self.parent, '_audio_decoded', None):
+                    falar_status("Áudio cravado na posição do cursor. Pressione espaço para testar.", imediato=True)
                 
     def on_clear(self, event):
         self.audio_path = None
