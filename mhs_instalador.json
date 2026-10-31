@@ -1,0 +1,17 @@
+{
+  "nome": "MHS Midi Sequencer",
+  "extensoes": [
+    ".mid",
+    ".kar"
+  ],
+  "incluir": [],
+  "excluir": [
+    "config.json",
+    "Ins files"
+  ],
+  "fora_da_compilacao": [
+    "numpy",
+    "pygame"
+  ],
+  "mantidas_na_compilacao": []
+}

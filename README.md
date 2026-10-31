@@ -27,7 +27,7 @@ incluindo o Yamaha PSR-SX600.
 - Quantizar, humanizar, aplicar arpejador/delay/harpa/presets de bateria.
 - Editor de Envelope de Tempo (BPM variável ao longo da música) e Tap
   Tempo.
-- Sincronizar um Áudio Guia (WAV/MP3/OGG) com o projeto, com ajuste fino
+- Sincronizar um Áudio Guia (WAV/MP3/OGG/FLAC) com o projeto, com ajuste fino
   de sincronismo.
 - Editar SysEx manualmente com um gerenciador dedicado, categorizado por
   tipo (Mixagem, Voice Creator, DSP, Drum Setup, etc).

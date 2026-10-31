@@ -82,7 +82,21 @@ CHANGELOG_TEXTS = {
         "globais e os timbres, volumes e ajustes dos canais na posição "
         "atual), e o Som do Teclado (Local Control) volta ao estado em "
         "que estava. Antes o teclado ficava zerado, sem os timbres do "
-        "projeto."
+        "projeto.\n\n"
+        "- Novo: Áudio Guia com motor novo e aba Áudio em Preferências. O "
+        "pygame saiu do programa: o miniaudio decodifica o arquivo (WAV, "
+        "MP3, OGG e FLAC) e o sounddevice toca pela placa de som que você "
+        "escolher, a mesma saída do Audio Style do Style Creator. Em "
+        "Preferências > Áudio há o sistema de som (ASIO, WASAPI, "
+        "DirectSound, MME ou WDM-KS), a placa, o par de canais (no ASIO), "
+        "o tamanho do buffer, a opção de alinhar o áudio com o MIDI pelo "
+        "relógio da placa de som (recomendada), o ajuste fino da "
+        "sincronia em milissegundos e um botão para testar a saída. "
+        "Tocar, pausar, retomar e pular posições saem sempre alinhados "
+        "com o MIDI: a cada início o programa calcula, pelo relógio da "
+        "própria placa, o ponto exato do arquivo que deve estar saindo "
+        "naquele instante. O programa fica bem menor sem o pygame (a "
+        "pasta instalada perde cerca de 30 MB)."
     ),
     "4.5.1": (
         "- Corrigido: depois de baixar a atualização pela janela de "
@@ -535,11 +549,14 @@ class MidiSequencer(wx.Frame):
         super().__init__(parent, title=title, size=(800, 600))
         self.carregar_configuracoes()
         
-        import pygame
+        # O callback da placa de som é Python: se outra thread (o Play, a janela) está com o GIL, ele espera até 5 ms (o padrão) e pode
+        # perder o bloco do Áudio Guia. 0,5 ms deixa o callback entrar quase na hora.
         try:
-            pygame.mixer.init()
-        except:
+            import sys
+            sys.setswitchinterval(0.0005)
+        except Exception:
             pass
+        self._guia = None                 # o Áudio Guia (mhs_audio_guia.GuiaDeAudio), criado na primeira vez que precisa
             
         self.tabs_data = []
         self.current_tab_idx = -1
@@ -794,95 +811,109 @@ class MidiSequencer(wx.Frame):
         except Exception:
             pass
 
-    # --- ÁUDIO GUIA: motor novo, via pygame.mixer.Sound/Channel ---
-    # O pygame.mixer.music (usado antes) só toca UM arquivo de cada vez
-    # via streaming, e o "start=" dele depende do parser interno do
-    # SDL_mixer pra buscar a posição certa - o Michel relatou desincronia
-    # toda vez que pausava/avançava/retrocedia (só tocar do zero
-    # funcionava). Em vez de confiar nesse seek "escondido", a gente
-    # decodifica o arquivo INTEIRO uma vez (com o próprio pygame.mixer.
-    # Sound - que já sabe ler WAV/MP3/OGG/FLAC, o SDL_mixer decodifica
-    # e reamostra sozinho pro formato do mixer, seja qual for o formato
-    # de origem) e guarda o PCM cru em memória; qualquer posição depois
-    # disso é só uma fatia desse buffer (sem redecodificar, sem depender
-    # de seek nenhum do SDL_mixer). Pausar/retomar na MESMA posição usa
-    # Channel.pause()/unpause() - o canal fica congelado no lugar exato,
-    # sem precisar reler nem recomeçar nada.
+    # --- ÁUDIO GUIA: miniaudio decodifica (WAV, MP3, OGG, FLAC), sounddevice toca pela placa escolhida em Preferências > Áudio ---
+    # O arquivo é decodificado INTEIRO uma vez (PCM de 16 bits estéreo, 44100 Hz) e qualquer posição depois disso é só uma fatia
+    # desse buffer: sem redecodificar e sem depender de seek de biblioteca nenhuma. O início de cada trecho é calculado pelo relógio
+    # da própria placa (ver mhs_audio_guia): tocar, pausar, retomar e pular saem sempre alinhados com a posição do MIDI. Pausar
+    # e retomar usam a posição do MIDI de cada momento, então o áudio nunca fica para trás nem à frente do que o MIDI está tocando.
+    def _obter_guia(self):
+        import mhs_audio_guia
+        if getattr(self, '_guia', None) is None:
+            self._guia = mhs_audio_guia.criar(self.config)
+        return self._guia
+
+    def _audio_reconfigurar(self):
+        """Preferências > Áudio mudou: o guia é refeito com a placa e os ajustes novos e o arquivo carregado é decodificado de novo."""
+        antigo, self._guia = getattr(self, '_guia', None), None
+        if antigo is not None:
+            try: antigo.fechar()
+            except Exception: pass
+        self._audio_paused = False
+        if getattr(self, 'audio_path', None) and os.path.exists(self.audio_path):
+            try: self._audio_reset_mixer_format()
+            except Exception: pass
+
+    def _audio_preparar(self):
+        """Abre a placa de som na thread principal antes do Play (abrir um driver ASIO leva uma fração de segundo)."""
+        if not (getattr(self, 'audio_path', None) and os.path.exists(self.audio_path)):
+            return
+        if getattr(self, 'audio_muted', False):
+            return
+        guia = getattr(self, '_guia', None)
+        if guia is not None and guia.carregado:
+            guia.preparar()
+
     def _audio_reset_mixer_format(self):
-        import pygame
+        """Decodifica o arquivo do Áudio Guia (o nome ficou de quando o motor era o pygame.mixer)."""
         self._audio_decoded = None
         caminho = getattr(self, 'audio_path', None)
-        if not caminho or not os.path.exists(caminho):
+        guia = None
+        try:
+            guia = self._obter_guia()
+        except Exception:
+            guia = None
+        if guia is not None:
+            try: guia.parar()
+            except Exception: pass
+        if not caminho or not os.path.exists(caminho) or guia is None:
             return
         try:
-            if not pygame.mixer.get_init():
-                pygame.mixer.init()
-            som = pygame.mixer.Sound(caminho)
-            bruto = som.get_raw()
-            fr, tamanho, nch = pygame.mixer.get_init()
-            stride = (abs(tamanho) // 8) * max(1, nch)
-            self._audio_decoded = (bruto, fr, stride)
+            self._audio_decoded = guia.carregar(caminho)         # duração em segundos
         except Exception:
             self._audio_decoded = None
-
-    def _audio_sound_from(self, pos_segundos):
-        decodificado = getattr(self, '_audio_decoded', None)
-        if not decodificado or pos_segundos < 0:
-            return None
-        bruto, fr, stride = decodificado
-        offset_bytes = int(round(pos_segundos * fr)) * stride
-        if offset_bytes >= len(bruto):
-            return None
-        try:
-            import pygame
-            return pygame.mixer.Sound(buffer=bruto[offset_bytes:])
-        except Exception:
-            return None
+        self._apply_audio_vol()
 
     def _audio_stop(self):
-        canal = getattr(self, '_audio_channel', None)
-        if canal is not None:
-            try: canal.stop()
+        guia = getattr(self, '_guia', None)
+        if guia is not None:
+            try: guia.parar()
             except Exception: pass
-        self._audio_channel = None
         self._audio_paused = False
 
     def _audio_pause(self):
-        canal = getattr(self, '_audio_channel', None)
-        if canal is not None:
+        guia = getattr(self, '_guia', None)
+        if guia is not None and guia.tocando:
             try:
-                canal.pause()
+                guia.parar()
                 self._audio_paused = True
             except Exception: pass
 
     def _audio_unpause(self):
-        canal = getattr(self, '_audio_channel', None)
-        if canal is not None and getattr(self, '_audio_paused', False):
-            try:
-                canal.unpause()
-                self._audio_paused = False
-                return True
-            except Exception:
-                pass
+        """Retoma o Áudio Guia de onde o MIDI está: recomeça na posição do MIDI (a mesma de quando pausou), alinhado pela placa."""
+        if getattr(self, '_audio_paused', False):
+            self._audio_paused = False
+            return self._audio_play_from(self.current_playback_time, 0.005)
         return False
 
-    def _audio_play_from(self, pos_midi_segundos):
-        """Toca o Áudio Guia a partir da posição do MIDI em segundos
-        (já descontando audio_offset por dentro). Devolve True se
-        realmente começou a tocar."""
-        self._audio_stop()
+    def _audio_play_from(self, pos_midi_segundos, atraso_midi=0.0):
+        """Toca o Áudio Guia a partir da posição do MIDI em segundos (já descontando audio_offset por dentro). `atraso_midi`: o laço do
+        Play marca o início do MIDI 5 ms adiante da chamada (start_time + 0.005). Devolve True se realmente começou a tocar."""
+        guia = getattr(self, '_guia', None)
         offset = getattr(self, 'audio_offset', 0.0)
-        som = self._audio_sound_from(pos_midi_segundos - offset)
-        if som is None:
+        pos = pos_midi_segundos - offset
+        if guia is None or not guia.carregado or not getattr(self, '_audio_decoded', None) or pos < 0 or pos >= self._audio_decoded:
+            if guia is not None and guia.tocando:
+                self._audio_stop()
             return False
+        self._audio_stop()
         try:
-            vol = 0.0 if getattr(self, 'audio_muted', False) else (getattr(self, 'audio_volume', 100) / 100.0)
-            som.set_volume(vol)
-            self._audio_channel = som.play()
-            self._audio_paused = False
+            self._apply_audio_vol()
+            guia.tocar_de(pos, atraso_midi)
             return True
         except Exception:
+            guia.erro = guia.erro or "falhou"
+            self._avisar_falha_audio(guia)
             return False
+
+    def _avisar_falha_audio(self, guia):
+        if getattr(self, '_avisou_falha_audio', False):
+            return
+        self._avisou_falha_audio = True
+        try:
+            from mhs_utils import falar_status
+            falar_status("A saída de áudio escolhida não abriu. Confira Preferências, aba Áudio.", imediato=True)
+        except Exception:
+            pass
 
     def load_tab_state(self, idx):
         if idx < 0 or idx >= len(self.tabs_data): return
@@ -2594,6 +2625,11 @@ class MidiSequencer(wx.Frame):
         # apertar F8 de novo. Precisa ser antes de fechar a porta.
         self.set_local_control(True)
         if self.output: self.output.close()
+        try:
+            if getattr(self, '_guia', None) is not None:
+                self._guia.fechar()
+        except Exception:
+            pass
         event.Skip()
     def ao_mostrar_tela(self, event):
         if event.IsShown():
@@ -3905,7 +3941,7 @@ class MidiSequencer(wx.Frame):
                 # o áudio, então não tem CHANCE de desincronizar.
                 audio_started = True
             else:
-                audio_started = self._audio_play_from(self.current_playback_time)
+                audio_started = self._audio_play_from(self.current_playback_time, 0.005)
 
         # O início da thread ACIMA já fez toda a "chegada" (chase e
         # áudio) pra self.current_playback_time - um seek_flag deixado
@@ -3963,7 +3999,7 @@ class MidiSequencer(wx.Frame):
                 start_time = time.time() - (self.current_playback_time / self.live_multiplier) + 0.005
 
                 if getattr(self, 'audio_path', None) and os.path.exists(self.audio_path):
-                    audio_started = self._audio_play_from(self.current_playback_time)
+                    audio_started = self._audio_play_from(self.current_playback_time, 0.005)
                 else:
                     audio_started = False
 
@@ -6091,10 +6127,10 @@ class MidiSequencer(wx.Frame):
 
     def _apply_audio_vol(self):
         try:
-            vol = 0.0 if getattr(self, 'audio_muted', False) else (getattr(self, 'audio_volume', 100) / 100.0)
-            canal = getattr(self, '_audio_channel', None)
-            if canal is not None:
-                canal.set_volume(vol)
+            vol = 0.0 if getattr(self, 'audio_muted', False) else max(0.0, min(1.0, getattr(self, 'audio_volume', 100) / 100.0))
+            guia = getattr(self, '_guia', None)
+            if guia is not None:
+                guia.volume = vol
         except: pass
 
     def limpar_selecoes(self, event):
@@ -8322,6 +8358,7 @@ class MidiSequencer(wx.Frame):
                 self.current_playback_time = self.last_start_time
                 
             self.current_playback_time = self.last_start_time
+            self._audio_preparar()
             self.tocando = True
             self.seek_flag = True
             import threading
@@ -8366,6 +8403,7 @@ class MidiSequencer(wx.Frame):
             if self.current_playback_time >= self.total_time:
                 self.current_playback_time = self.last_start_time
             self.last_start_time = self.current_playback_time
+            self._audio_preparar()
             self.tocando = True
             self.seek_flag = True
             import threading

@@ -1538,8 +1538,11 @@ class PreferenciasDialog(wx.Dialog):
                                                                  "beat 2, tick 500; o Ctrl+Page Down vai ao beat 3, tick 500. A âncora é para onde o Stop volta."), 0, wx.ALL, 10)
         self.aba_navegacao.SetSizer(sizer_nav)
 
+        self._montar_aba_audio()
+
         self.notebook.AddPage(self.aba_metro, "Metrônomo")
         self.notebook.AddPage(self.aba_navegacao, "Navegação")
+        self.notebook.AddPage(self.aba_audio, "Áudio")
         self.notebook.AddPage(self.aba_atualizacoes, "Atualizações")
         
         btn_add.Bind(wx.EVT_BUTTON, self.on_add)
@@ -1624,6 +1627,126 @@ class PreferenciasDialog(wx.Dialog):
                 self.txt_pasta_salvar.SetValue(nova_pasta)
                 from mhs_utils import falar_status
                 falar_status("Pasta de salvamento selecionada", imediato=True)
+
+    # --- Aba Áudio: saída de som do Áudio Guia (ASIO, WASAPI, DirectSound, MME, WDM-KS) ---
+    def _montar_aba_audio(self):
+        import mhs_audio_guia as saida
+        self._saida = saida
+        self.aba_audio = wx.Panel(self.notebook)
+        sz = wx.BoxSizer(wx.VERTICAL)
+        if not saida.disponivel():
+            sz.Add(wx.StaticText(self.aba_audio, label="As bibliotecas de áudio (sounddevice e miniaudio) não estão instaladas: o Áudio Guia não toca."), 0, wx.ALL, 10)
+        sz.Add(wx.StaticText(self.aba_audio, label="&Sistema de som:"), 0, wx.TOP | wx.LEFT, 10)
+        self.cb_audio_host = wx.Choice(self.aba_audio)
+        self.cb_audio_host.SetName("Sistema de som")
+        sz.Add(self.cb_audio_host, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        sz.Add(wx.StaticText(self.aba_audio, label="&Saída (placa de som):"), 0, wx.TOP | wx.LEFT, 10)
+        self.cb_audio_saida = wx.Choice(self.aba_audio)
+        self.cb_audio_saida.SetName("Saída, placa de som")
+        sz.Add(self.cb_audio_saida, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        sz.Add(wx.StaticText(self.aba_audio, label="&Canais de saída (só no ASIO):"), 0, wx.TOP | wx.LEFT, 10)
+        self.cb_audio_canais = wx.Choice(self.aba_audio)
+        self.cb_audio_canais.SetName("Canais de saída, só no ASIO")
+        sz.Add(self.cb_audio_canais, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        sz.Add(wx.StaticText(self.aba_audio, label="&Tamanho do buffer (fora do ASIO; no ASIO vale o do driver):"), 0, wx.TOP | wx.LEFT, 10)
+        self.cb_audio_latencia = wx.Choice(self.aba_audio, choices=[n for n, _ in saida.LATENCIAS])
+        self.cb_audio_latencia.SetName("Tamanho do buffer")
+        sz.Add(self.cb_audio_latencia, 0, wx.EXPAND | wx.LEFT | wx.RIGHT, 10)
+        self.chk_audio_compensar = wx.CheckBox(self.aba_audio, label="&Alinhar o áudio com o MIDI pelo relógio da placa de som (recomendado)")
+        self.chk_audio_compensar.SetValue(bool(self.config_temp.get("audio_compensar", True)))
+        sz.Add(self.chk_audio_compensar, 0, wx.TOP | wx.LEFT, 10)
+        sz.Add(wx.StaticText(self.aba_audio, label="A&juste fino da sincronia, em milissegundos (positivo adianta o áudio, negativo atrasa):"), 0, wx.TOP | wx.LEFT, 10)
+        self.sp_audio_ajuste = wx.SpinCtrl(self.aba_audio, min=-300, max=300, initial=int(self.config_temp.get("audio_adiantar_ms", 0) or 0))
+        self.sp_audio_ajuste.SetName("Ajuste fino da sincronia, em milissegundos")
+        sz.Add(self.sp_audio_ajuste, 0, wx.LEFT | wx.RIGHT, 10)
+        self.btn_audio_testar = wx.Button(self.aba_audio, label="&Testar a saída de áudio")
+        self.btn_audio_testar.Bind(wx.EVT_BUTTON, self.OnTestarSaidaAudio)
+        sz.Add(self.btn_audio_testar, 0, wx.ALL, 10)
+        self.aba_audio.SetSizer(sz)
+
+        sistemas = saida.listar_sistemas()
+        self._audio_sistemas = [""] + sistemas
+        self.cb_audio_host.AppendItems([saida.NOME_AUTOMATICO] + sistemas)
+        atual = self.config_temp.get("audio_host", "")
+        self.cb_audio_host.SetSelection(self._audio_sistemas.index(atual) if atual in self._audio_sistemas else 0)
+        ms = int(self.config_temp.get("audio_latencia_ms", 0) or 0)
+        self.cb_audio_latencia.SetSelection(next((i for i, (_, v) in enumerate(saida.LATENCIAS) if v == ms), 0))
+        self.cb_audio_host.Bind(wx.EVT_CHOICE, lambda e: self._preencher_saidas_audio(None))
+        self.cb_audio_saida.Bind(wx.EVT_CHOICE, lambda e: self._preencher_canais_audio(0))
+        self._preencher_saidas_audio(self.config_temp.get("audio_saida", ""), self.config_temp.get("audio_canais", 0))
+
+    def _sistema_audio(self):
+        return self._audio_sistemas[max(0, self.cb_audio_host.GetSelection())]
+
+    def _preencher_saidas_audio(self, nome_salvo, canal_salvo=0):
+        sistema = self._sistema_audio()
+        self._audio_saidas = self._saida.listar_saidas(sistema) if sistema else []
+        self.cb_audio_saida.Clear()
+        self.cb_audio_saida.AppendItems([n for _, n in self._audio_saidas])
+        if self._audio_saidas:
+            alvo = self._saida.achar_saida(sistema, nome_salvo) if nome_salvo else None
+            pos = next((i for i, (ix, _) in enumerate(self._audio_saidas) if ix == alvo), 0)
+            self.cb_audio_saida.SetSelection(pos)
+        self.cb_audio_saida.Enable(bool(self._audio_saidas))
+        self._preencher_canais_audio(canal_salvo)
+
+    def _preencher_canais_audio(self, canal_salvo):
+        self.cb_audio_canais.Clear()
+        self._audio_pares = []
+        sel = self.cb_audio_saida.GetSelection()
+        if self._sistema_audio() == "ASIO" and sel != wx.NOT_FOUND:
+            self._audio_pares = self._saida.pares_de_canais(self._audio_saidas[sel][0])
+            self.cb_audio_canais.AppendItems([n for _, n in self._audio_pares])
+            self.cb_audio_canais.SetSelection(next((i for i, (c, _) in enumerate(self._audio_pares) if c == int(canal_salvo or 0)), 0))
+            self.cb_audio_canais.Enable(True)
+        else:
+            self.cb_audio_canais.Enable(False)
+
+    def _valores_audio(self):
+        sistema = self._sistema_audio()
+        sel = self.cb_audio_saida.GetSelection()
+        nome = self._audio_saidas[sel][1] if sistema and sel != wx.NOT_FOUND and self._audio_saidas else ""
+        csel = self.cb_audio_canais.GetSelection()
+        canais = self._audio_pares[csel][0] if self._audio_pares and csel != wx.NOT_FOUND else 0
+        lsel = self.cb_audio_latencia.GetSelection()
+        return {
+            "audio_host": sistema if nome else "",
+            "audio_saida": nome,
+            "audio_canais": canais,
+            "audio_latencia_ms": self._saida.LATENCIAS[lsel if lsel != wx.NOT_FOUND else 0][1],
+            "audio_compensar": self.chk_audio_compensar.GetValue(),
+            "audio_adiantar_ms": self.sp_audio_ajuste.GetValue(),
+        }
+
+    def OnTestarSaidaAudio(self, event):
+        # Três toques pela saída que está na tela (ainda não salva): serve para ouvir se abriu e para o NVDA dizer a latência que o
+        # driver informa.
+        from mhs_utils import falar_status
+        self._parar_teste_audio()
+        try:
+            tocador = self._saida.criar(self._valores_audio(), self._saida.TocadorDeTeste)
+            if tocador is None:
+                raise RuntimeError("não há saída de áudio disponível")
+            tocador.tocar_teste()
+        except Exception as e:
+            falar_status(f"Não foi possível abrir esta saída de áudio. {e}", imediato=True)
+            return
+        self._tocador_teste = tocador
+        lat = getattr(tocador, 'latencia_s', None)
+        if lat:
+            falar_status(f"Tocando três toques. O driver informa latência de {lat * 1000:.0f} milissegundos.", imediato=True)
+        else:
+            falar_status("Tocando três toques.", imediato=True)
+        self._timer_teste = wx.CallLater(1400, self._parar_teste_audio)
+
+    def _parar_teste_audio(self):
+        t = getattr(self, '_tocador_teste', None)
+        self._tocador_teste = None
+        if t is not None:
+            try:
+                t.fechar()
+            except Exception:
+                pass
 
     def on_key_hook(self, event):
         code = event.GetKeyCode()
@@ -1720,6 +1843,11 @@ class PreferenciasDialog(wx.Dialog):
 
         self.config_temp['verificar_atualizacoes'] = self.chk_verificar_atualizacoes.GetValue()
         self.config_temp['navegacao_compasso'] = 'relativa' if self.combo_navegacao.GetSelection() == 1 else 'cabeca'
+        audio_antes = {k: self.config_temp.get(k) for k in ("audio_host", "audio_saida", "audio_canais", "audio_latencia_ms",
+                                                            "audio_compensar", "audio_adiantar_ms")}
+        novos_audio = self._valores_audio()
+        self.config_temp.update(novos_audio)
+        audio_mudou = any(audio_antes.get(k) != v for k, v in novos_audio.items())
 
         try:
             from mhs_utils import CONFIG_FILE
@@ -1728,6 +1856,8 @@ class PreferenciasDialog(wx.Dialog):
                 json.dump(self.config_temp, f, indent=4, ensure_ascii=False)
             
             self.parent.config = self.config_temp
+            if audio_mudou and hasattr(self.parent, '_audio_reconfigurar'):
+                self.parent._audio_reconfigurar()
             
             if portas_mudaram:
                 self.parent.conectar_midi(portas_selecionadas, novo_out)

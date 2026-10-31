@@ -692,7 +692,7 @@ Ver seção 12.5 (mesma tela, acessível também pela tecla Menu/Aplicativo).
 
 ## 12.14 Preferências (Ctrl+P)
 
-Seis abas (Ctrl+Tab navega entre elas):
+Sete abas (Ctrl+Tab navega entre elas):
 
 - **Midi**: lista de Entradas MIDI (pode marcar mais de uma - o programa
   escuta todas ao mesmo tempo), escolha da Saída MIDI, e o Padrão de
@@ -723,6 +723,20 @@ Seis abas (Ctrl+Tab navega entre elas):
   programa fala o compasso, o beat e o tick. Se não há mais compasso (ou
   beat) adiante, ele avisa e não sai do lugar. A escolha fica guardada
   no config.json.
+- **Áudio**: a saída de som do Áudio Guia. **Sistema de som** (o padrão
+  é "Automático": WASAPI na saída padrão do Windows, com sincronia
+  exata; também ASIO, WASAPI, DirectSound, MME e WDM-KS), **Saída (placa
+  de som)**, **Canais de saída** (só no ASIO: em qual par de saídas o
+  áudio sai), **Tamanho do buffer** (fora do ASIO; no ASIO vale o do
+  driver), a caixa **Alinhar o áudio com o MIDI pelo relógio da placa de
+  som** (recomendada: o programa usa o instante em que cada bloco de
+  áudio realmente sai pelo conversor para escolher o ponto exato do
+  arquivo, em vez de só começar "agora"), o **Ajuste fino da sincronia**
+  em milissegundos (positivo adianta o áudio, negativo atrasa; serve
+  para compensar o atraso do próprio sintetizador) e o botão **Testar a
+  saída de áudio**, que toca três toques e fala a latência que o driver
+  informa. Se a placa escolhida não abrir, o programa avisa por voz e
+  volta à saída padrão.
 - **Atualizações**: mostra a versão instalada, uma caixa de marcação
   "Verificar atualizações automaticamente ao iniciar o programa" (marcada
   por padrão) e o botão "Procurar Atualizações Agora" (disponível sempre,
@@ -795,6 +809,17 @@ Esquerda/Direita movem de 10ms, Cima/Baixo de 1ms quando o controle está
 em foco). Se o nome do arquivo tiver o BPM nele (por exemplo
 "Groove_120bpm.wav"), o programa detecta sozinho e já ajusta o andamento
 do projeto.
+
+O arquivo pode ser WAV, MP3, OGG ou FLAC. O programa decodifica o
+arquivo inteiro uma vez, ao carregar, e toca pela placa escolhida em
+Preferências > Áudio. Tocar, pausar, retomar, pular de posição e mudar o
+volume ou o mudo (Ctrl+Alt+M) saem sempre alinhados com o MIDI: ao
+retomar, o áudio recomeça exatamente na posição em que o MIDI está, e o
+ponto do arquivo é calculado pelo relógio da placa de som. Se o som do
+guia ficar adiantado ou atrasado em relação ao teclado por causa do
+atraso do próprio sintetizador, use o Ajuste fino da aba Áudio (vale
+para todos os projetos); o Deslocamento da tela do Áudio Guia continua
+sendo o ajuste de cada projeto.
 
 O áudio fica ancorado exatamente no **segundo** em que foi carregado (ou
 para onde você o deslocou com o ajuste fino) - como um arquivo de áudio
