@@ -578,6 +578,31 @@ Depois abre o editor específico daquele efeito, com até 16 parâmetros,
 mais um controle de Dry/Wet Global e (se você marcou 2 ou mais canais) um
 controle extra por canal, pra dosar quanto cada canal recebe do efeito.
 
+**Bypass (Ctrl+B):** o primeiro controle de qualquer editor de efeito
+(Variation ou Inserção, em qualquer Gaveta) é a caixa "Bypass do efeito".
+Marcada, o programa descarrega o efeito daquele canal no teclado: o efeito
+para de soar, como se não existisse. Desmarcada, o programa reenvia ao
+teclado todos os dados do efeito, e ele volta exatamente como estava.
+Serve para ouvir o canal com e sem o efeito. Ctrl+B liga e desliga de
+qualquer ponto da tela (a barra de Espaço também, quando o foco está na
+própria caixa; em qualquer outro lugar o Espaço continua tocando a
+música). O Bypass não muda nada do que está guardado no arquivo: enquanto
+ele estiver ligado, os ajustes que você fizer nos controles ficam
+guardados mas só são enviados ao teclado quando você desmarcar. Se fechar
+a tela com o Bypass ligado, o efeito volta ao teclado, que fica igual ao
+arquivo. Tocar a música com a tela aberta e o Bypass ligado reafirma o
+Bypass logo depois de começar.
+
+**Voz com efeito próprio:** algumas vozes do teclado têm um efeito
+embutido que dá o som característico delas (por exemplo a guitarra "GTR
+Drive", Banco 0, LSB 114, Patch 30). Ligar uma Variation como Inserção, ou
+uma gaveta de Inserção, no canal dessa voz troca o efeito dela pelo seu, e o
+som original perde o drive e baixa de volume. Para pôr um efeito por cima
+sem perder o da voz, use a Variation como efeito de envio: na primeira
+tela, em "Canais que passam por este efeito", marque o canal dessa voz e
+mais um canal qualquer (com 2 ou mais canais o programa usa a Conexão
+SYSTEM e o nível de envio de cada canal), e aí o som da voz é mantido.
+
 ## 12.4 Voice Creator - Edição de Timbre (Ctrl+T)
 
 Editor de síntese do canal atual: 30 parâmetros roláveis, todos enviados

@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.7"
+VERSAO_APP = "4.8"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,32 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.8": (
+        "- Novo: Bypass (Ctrl+B) nas telas de edição de DSP, na Variation "
+        "e nas gavetas de Inserção, em qualquer gaveta. É a primeira "
+        "caixa de verificação da tela, antes de qualquer botão. Marcada, o "
+        "programa descarrega o efeito daquele canal no teclado, e o "
+        "efeito para de soar. Desmarcada, o programa reenvia todos os "
+        "dados do efeito e ele volta como estava. Serve para ouvir o canal "
+        "com e sem o efeito. O Ctrl+B funciona de qualquer ponto da tela "
+        "(o Espaço também liga e desliga a caixa quando o foco está nela). "
+        "O Bypass não muda o que está guardado no arquivo: enquanto ele "
+        "estiver ligado, os ajustes que você faz ficam guardados e só vão "
+        "ao teclado quando você desmarca. Se fechar a tela com o Bypass "
+        "ligado, o efeito volta ao teclado. Descarregar a Variation zera o "
+        "envio dos canais, tira o canal de destino e põe o tipo em \"sem "
+        "efeito\"; numa Inserção, desliga cada cópia do efeito.\n\n"
+        "- Corrigido: apagar todos os SysEx no Gerenciador Avançado de "
+        "SysEx, salvar e reabrir o MIDI trazia de volta três SysEx da "
+        "Variation (Conexão, Canal de Destino e Tipo do Efeito, este como "
+        "\"sem efeito\"). Acontecia em MIDIs que têm o CC94 (envio para a "
+        "Variation) nos canais: ao abrir, o programa criava a Gaveta 1 só "
+        "por causa do CC94 e, ao salvar, escrevia esses três SysEx. Agora "
+        "uma Variation que existe só por causa do CC94, sem efeito "
+        "escolhido, não grava SysEx nenhum. Os CC94 dos canais continuam "
+        "no arquivo, e quem não apagou nada continua com os SysEx como "
+        "estavam."
+    ),
     "4.7": (
         "- Alterado: ao trocar de timbre pelo teclado, o programa não mexe "
         "mais no Reverb, no Chorus, na Expressão, no Pan nem no Volume. "
@@ -6572,8 +6598,12 @@ class MidiSequencer(wx.Frame):
                                     # canais mandam pro MESMO efeito da Gaveta 1.
                                     if not hasattr(self, 'variation_dsp_cache'):
                                         self.variation_dsp_cache = {}
+                                    # 'cc94_only': a gaveta nasceu SÓ deste CC94 (nenhum
+                                    # SysEx de tipo/conexão do efeito no arquivo). Ver
+                                    # consolidar_projeto: nesse caso ela não escreve SysEx
+                                    # (apagar todos os SysEx e salvar não pode ressuscitá-los).
                                     v0 = self.variation_dsp_cache.setdefault(
-                                        0, {'active': False, 'ch': 0x7F, 'msb_idx': 0, 'lsb_idx': 0, 'ret': -1, 'p': [-1] * 16, 'chs': {}})
+                                        0, {'active': False, 'ch': 0x7F, 'msb_idx': 0, 'lsb_idx': 0, 'ret': -1, 'p': [-1] * 16, 'chs': {}, 'cc94_only': True})
                                     v0['active'] = True
                                     v0.setdefault('chs', {})[ch] = msg.value
                                     cc_lidos[ch].add(94)
@@ -7255,6 +7285,9 @@ class MidiSequencer(wx.Frame):
         self.active_dsp_editor = dlg_editor
         try:
             if dlg_editor.ShowModal() == wx.ID_OK:
+                # Efeito escolhido de propósito na tela: deixa de ser "só CC94".
+                if isinstance(self.variation_dsp_cache.get(slot_idx), dict):
+                    self.variation_dsp_cache[slot_idx].pop('cc94_only', None)
                 if getattr(self, 'recorded_events', None): self.aplicar_gravacao()
                 self.save_state(f"Efeito DSP (Gaveta {slot_idx + 1})")
 
@@ -7653,9 +7686,16 @@ class MidiSequencer(wx.Frame):
                     else:
                         part_val = 0x7F if (msb_v == 0 or not slot0_chs) else next(iter(slot0_chs))
                         conn_val = 0x01 if part_val == 0x7F else 0x00
-                    meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, 0x5A, conn_val, 0xF7])])
-                    meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, 0x5B, part_val, 0xF7])])
-                    meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, type_offset, msb_v, dsp_slot.get('lsb_idx', 0), 0xF7])])
+                    # Gaveta que só existe por causa de CC94 nos canais e nunca teve efeito
+                    # escolhido (tipo "sem efeito", sem Return nem parâmetros): não escreve
+                    # os 3 SysEx (Conexão, Canal de Destino, Tipo). Antes eles voltavam a
+                    # cada salvar, mesmo depois de apagados no Gerenciador de SysEx.
+                    sem_efeito_definido = (dsp_slot.get('cc94_only') and msb_v == 0 and ret_v == -1
+                                           and all(x == -1 for x in p_list))
+                    if not sem_efeito_definido:
+                        meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, 0x5A, conn_val, 0xF7])])
+                        meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, 0x5B, part_val, 0xF7])])
+                        meta_events.append([sys_tick, mido.Message.from_bytes([0xF0, 0x43, 0x10, 0x4C, high, mid, type_offset, msb_v, dsp_slot.get('lsb_idx', 0), 0xF7])])
                     if slot0_system:
                         # O CC94 ("Variation Send Level") de cada canal TEM que
                         # vir DEPOIS do tipo/conexão da Variation, senão o

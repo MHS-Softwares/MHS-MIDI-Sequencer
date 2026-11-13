@@ -4208,6 +4208,102 @@ def _dsp_rotulo_canais(parent, slot_idx, canal_idx):
     return f"Canal {canal_idx + 1}"
 
 
+# ---------------------------------------------------------------- BYPASS do efeito (Ctrl+B) nas telas de edição de DSP
+# Caixa de verificação no INÍCIO da tela (antes de qualquer botão): marcada = descarrega o efeito desta gaveta no
+# teclado (o efeito para de soar, como se não existisse); desmarcada = reenvia todos os dados do efeito (o mesmo que a
+# tela manda ao abrir). É só para ouvir com e sem o efeito: não muda o que está guardado no arquivo/cache. Se a tela
+# for fechada com o bypass ligado, o efeito volta ao teclado (teclado e arquivo ficam iguais).
+
+def _dsp_bypass_msgs(dlg):
+    """Mensagens que DESCARREGAM o efeito desta gaveta no teclado (o inverso do que enviar_para_teclado manda)."""
+    chs = _dsp_canais_do_slot(dlg.cache)
+    msgs = []
+    if dlg.slot_idx == 0:
+        # Variation: sem envio nenhum dos canais (CC94 = 0), sem canal de destino (7F) e Tipo "sem efeito" (MSB 0 / LSB 0).
+        for c in chs:
+            msgs.append([0xB0 + c, 94, 0])
+        msgs.append([0xF0, 0x43, 0x10, 0x4C, 0x02, 0x01, 0x5B, 0x7F, 0xF7])
+        msgs.append([0xF0, 0x43, 0x10, 0x4C, 0x02, 0x01, 0x40, 0x00, 0x00, 0xF7])
+    else:
+        # Inserção: cada cópia física (uma por canal) desligada (conexão 7F) e Tipo "sem efeito".
+        n = len(chs) if len(chs) >= 2 else 1
+        for nn in _dsp_mids_preview(dlg.parent_seq, dlg.slot_idx, n)[:n]:
+            msgs.append([0xF0, 0x43, 0x10, 0x4C, 0x03, nn, 0x0C, 0x7F, 0xF7])
+            msgs.append([0xF0, 0x43, 0x10, 0x4C, 0x03, nn, 0x00, 0x00, 0x00, 0xF7])
+    return msgs
+
+
+def _dsp_enviar_bypass(dlg):
+    import mido, time
+    saida = getattr(dlg.parent_seq, 'output', None)
+    if not saida:
+        return
+    for m in _dsp_bypass_msgs(dlg):
+        try:
+            saida.send(mido.Message.from_bytes(m))
+            if len(m) >= 7 and m[6] in (0x40, 0x00, 0x0C): time.sleep(0.05)
+        except Exception:
+            pass
+
+
+def _dsp_set_bypass(dlg, ligado, falar=True):
+    ligado = bool(ligado)
+    dlg.bypass = ligado
+    if dlg.chk_bypass.GetValue() != ligado:
+        dlg.chk_bypass.SetValue(ligado)
+    if ligado:
+        _dsp_enviar_bypass(dlg)
+    else:
+        dlg.enviar_para_teclado(None)      # com bypass já desligado: manda de novo todos os dados do efeito
+    if falar:
+        try:
+            falar_status("Bypass ligado: efeito descarregado do teclado." if ligado
+                         else "Bypass desligado: efeito reenviado ao teclado.", imediato=True)
+        except Exception:
+            pass
+
+
+def _dsp_add_bypass(dlg, panel, vbox):
+    """Cria a caixa Bypass como PRIMEIRO controle da tela (antes do Preset e dos botões)."""
+    import wx
+    dlg.bypass = False
+    dlg.chk_bypass = wx.CheckBox(panel, label="Bypass do efeito - descarrega o efeito no teclado (Ctrl+B)")
+    dlg.chk_bypass.SetName("Bypass do efeito")
+    vbox.Add(dlg.chk_bypass, 0, wx.ALL, 8)
+    dlg.chk_bypass.Bind(wx.EVT_CHECKBOX, lambda e: _dsp_set_bypass(dlg, e.IsChecked()))
+
+
+def _dsp_bypass_tecla(dlg, event):
+    """Ctrl+B em qualquer lugar da tela, e Espaço com o foco na própria caixa (o Espaço da tela toca/para a música).
+    Devolve True se tratou a tecla."""
+    import wx
+    code = event.GetKeyCode()
+    ctrl, shift, alt = event.ControlDown(), event.ShiftDown(), event.AltDown()
+    if ctrl and not shift and not alt and code in (ord('B'), ord('b')):
+        _dsp_set_bypass(dlg, not dlg.bypass)
+        return True
+    if code == wx.WXK_SPACE and not ctrl and not shift and not alt and dlg.FindFocus() is dlg.chk_bypass:
+        _dsp_set_bypass(dlg, not dlg.bypass)
+        return True
+    return False
+
+
+def _dsp_reafirmar_bypass(dlg):
+    # Tocar a música manda de volta os SysEx do efeito que estão no arquivo: com o bypass ligado, reafirma o bypass.
+    try:
+        if dlg and getattr(dlg, 'bypass', False):
+            _dsp_enviar_bypass(dlg)
+    except Exception:
+        pass
+
+
+def _dsp_fim_modal(dlg, ret, super_end):
+    # Fechar com o bypass ligado devolve o efeito ao teclado (ele fica igual ao arquivo).
+    if getattr(dlg, 'bypass', False):
+        _dsp_set_bypass(dlg, False, falar=False)
+    super_end(ret)
+
+
 class SelectDSPFamilyDialog(wx.Dialog):
     def __init__(self, parent, canal_idx, variation_dsp_cache):
         super().__init__(parent, title=f"Roteamento de DSP - Canal {canal_idx + 1}", size=(420, 560))
@@ -4387,6 +4483,7 @@ class DelayDSPEditor(wx.Dialog):
 
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
+        _dsp_add_bypass(self, panel, vbox)   # 1o controle da tela: Bypass (Ctrl+B)
         
         self.scr = wx.ScrolledWindow(panel, style=wx.VSCROLL)
         self.scr.SetScrollRate(0, 20)
@@ -4472,6 +4569,7 @@ class DelayDSPEditor(wx.Dialog):
             if opc_evt:
                 falar_status(_rotulo_valor_dsp(obj_evt.GetName(), obj_evt.GetValue(), opc_evt), imediato=True)
 
+        if getattr(self, 'bypass', False): return   # bypass ligado: o efeito segue descarregado no teclado
         if not getattr(self.parent_seq, 'output', None): return
 
         msgs = []
@@ -4530,6 +4628,9 @@ class DelayDSPEditor(wx.Dialog):
                 if len(m) >= 7 and m[6] in [0x40, 0x00]: time.sleep(0.05)
             except: pass
 
+    def EndModal(self, retCode):
+        _dsp_fim_modal(self, retCode, super().EndModal)
+
     def refrescar(self):
         # Chamado (via wx.CallAfter) quando o teclado termina uma rajada de
         # SysEx com esta tela aberta - self.cache é o MESMO dicionário de
@@ -4557,9 +4658,14 @@ class DelayDSPEditor(wx.Dialog):
         alt = event.AltDown()
         obj = self.FindFocus()
 
+        if _dsp_bypass_tecla(self, event): return
+
         if code in [wx.WXK_SPACE, 32]:
             if ctrl and not alt and not shift: getattr(self.parent_seq, 'toggle_pausa', lambda x: None)(None); return
-            elif not ctrl and not alt and not shift: getattr(self.parent_seq, 'toggle_reproducao', lambda x: None)(None); return
+            elif not ctrl and not alt and not shift:
+                getattr(self.parent_seq, 'toggle_reproducao', lambda x: None)(None)
+                for _atraso in (250, 700): wx.CallLater(_atraso, _dsp_reafirmar_bypass, self)
+                return
 
         if code in [wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER]: self.EndModal(wx.ID_OK); return
         if code == wx.WXK_ESCAPE: self.EndModal(wx.ID_CANCEL); return
@@ -4603,6 +4709,7 @@ class StandardDSPEditor(wx.Dialog):
         
         panel = wx.Panel(self)
         vbox = wx.BoxSizer(wx.VERTICAL)
+        _dsp_add_bypass(self, panel, vbox)   # 1o controle da tela: Bypass (Ctrl+B)
         
         self.scr = wx.ScrolledWindow(panel, style=wx.VSCROLL)
         self.scr.SetScrollRate(0, 20)
@@ -4710,6 +4817,7 @@ class StandardDSPEditor(wx.Dialog):
             if opc_evt:
                 falar_status(_rotulo_valor_dsp(obj_evt.GetName(), obj_evt.GetValue(), opc_evt), imediato=True)
 
+        if getattr(self, 'bypass', False): return   # bypass ligado: o efeito segue descarregado no teclado
         if not getattr(self.parent_seq, 'output', None): return
 
         msgs = []
@@ -4780,6 +4888,9 @@ class StandardDSPEditor(wx.Dialog):
                 if len(m) >= 7 and m[6] in [0x40, 0x00]: time.sleep(0.05)
             except: pass
 
+    def EndModal(self, retCode):
+        _dsp_fim_modal(self, retCode, super().EndModal)
+
     def refrescar(self):
         # Ver o comentário do mesmo método no DelayDSPEditor - self.cache é
         # referência direta a variation_dsp_cache[slot_idx], já atualizado
@@ -4805,6 +4916,8 @@ class StandardDSPEditor(wx.Dialog):
         
         obj = self.FindFocus()
 
+        if _dsp_bypass_tecla(self, event): return
+
         # --- 1. COMANDOS GLOBAIS ---
         if code in [wx.WXK_SPACE, 32]:
             if ctrl and not alt and not shift:
@@ -4812,6 +4925,7 @@ class StandardDSPEditor(wx.Dialog):
                 return
             elif not ctrl and not alt and not shift:
                 getattr(self.parent_seq, 'toggle_reproducao', lambda x: None)(None)
+                for _atraso in (250, 700): wx.CallLater(_atraso, _dsp_reafirmar_bypass, self)
                 return
 
         if code in [wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER]:
