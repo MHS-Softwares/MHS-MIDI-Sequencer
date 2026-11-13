@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.6"
+VERSAO_APP = "4.7"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,29 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.7": (
+        "- Alterado: ao trocar de timbre pelo teclado, o programa não mexe "
+        "mais no Reverb, no Chorus, na Expressão, no Pan nem no Volume. "
+        "Quando você escolhe um timbre novo, o teclado manda junto uma "
+        "rajada de valores desses controles (por controle e por SysEx do "
+        "Multi Part), e o programa os passava adiante: o som mudava de "
+        "volume e de quantidade de efeito, e os valores da coluna do canal "
+        "e do arquivo mudavam também. Agora essa rajada é ignorada: o som "
+        "e a coluna ficam como estavam. Antes, só o Volume e a Expressão "
+        "eram segurados. No fim da troca de timbre o programa continua "
+        "reafirmando o Volume da coluna, mas deixou de reenviar a "
+        "Expressão, o que a mudava sem você pedir. O Program Change, o "
+        "banco e os demais parâmetros do timbre (filtro, ressonância, "
+        "envelope, vibrato e os efeitos de inserção) continuam sendo "
+        "capturados como antes. Girar o Reverb, o Chorus ou a Expressão no "
+        "teclado fora da troca de timbre continua valendo normalmente.\n\n"
+        "- Corrigido: no Drum Setup, aba \"Montagem de Kit\", clicar em "
+        "\"Aplicar Mapeamento desta Peça\" logo depois de mexer no Banco, "
+        "no Patch ou na Peça Doadora (menos de meio segundo, o que "
+        "acontece de verdade com o atalho Alt+A) cancelava a volta ao kit "
+        "do canal, e o canal ficava no kit doador no teclado, em vez de "
+        "voltar ao kit do arquivo. Agora a volta ao kit sempre acontece."
+    ),
     "4.6": (
         "- Novo: Navegação por compasso e beat com duas opções, em "
         "Preferências > Navegação. O padrão continua sendo cair sempre na "
@@ -1558,6 +1581,10 @@ class MidiSequencer(wx.Frame):
 
         if msg.type == 'sysex':
             d = list(msg.data)
+            # Multi Part (Volume/Pan/Reverb/Chorus) que o teclado despeja NA
+            # RAJADA de troca de timbre: não entra no modelo nem passa pro
+            # sintetizador (decisão do Michel, igual ao Volume/Expression por CC).
+            bloquear_sysex = False
             if len(d) >= 7 and tuple(d[0:4]) == (67, 126, 1, 0):
                 micros = (d[4] * 16384) + (d[5] * 128) + d[6]
                 if micros > 0:
@@ -1590,6 +1617,13 @@ class MidiSequencer(wx.Frame):
                     msg = msg.copy(data=d)
                     if high == 0x08:
                         mid = novo_ch
+
+                # Já existia uma rajada de troca de timbre aberta (Bank/PC ou
+                # outro SysEx antes desta mensagem)? Só então Volume/Pan/
+                # Reverb/Chorus do Multi Part são "do timbre" e não do usuário.
+                em_troca_de_timbre = getattr(self, '_captura_timbre', None) is not None
+                if em_troca_de_timbre and high == 0x08 and param in (0x0B, 0x0E, 0x12, 0x13):
+                    bloquear_sysex = True
 
                 # Qualquer SysEx de DSP do teclado abre/renova a janela de
                 # captura de rajada de troca de timbre.
@@ -1769,7 +1803,9 @@ class MidiSequencer(wx.Frame):
                 # O teclado despeja esses SysEx junto com o timbre. Antes eles
                 # só eram ecoados e sumiam ao salvar; agora entram no modelo,
                 # tudo no canal em foco.
-                if high == 0x08 and 0 <= novo_ch < 16 and len(d) >= 7:
+                if bloquear_sysex:
+                    pass
+                elif high == 0x08 and 0 <= novo_ch < 16 and len(d) >= 7:
                     addr_mp, val_mp = d[5], d[6]
                     c_alvo = self.canais[novo_ch]
                     if addr_mp == 0x0E:
@@ -1816,6 +1852,9 @@ class MidiSequencer(wx.Frame):
                         if cap:
                             cap['visto']['vc'].add(addr_mp)
                         self.dirty = True
+
+            if bloquear_sysex:
+                return
 
             if getattr(self, 'output', None):
                 try:
@@ -1939,11 +1978,12 @@ class MidiSequencer(wx.Frame):
                                 else:
                                     prop_map = {7: "Volume", 10: "Pan", 11: "Expression", 91: "Reverb", 93: "Chorus"}
                                     if r_msg.control in prop_map:
-                                        # Durante uma troca de timbre, Volume (7)
-                                        # e Expression (11) só passam pro
-                                        # sintetizador, não entram no modelo/
-                                        # arquivo (decisão do Michel).
-                                        if getattr(self, '_captura_timbre', None) and r_msg.control in (7, 11):
+                                        # Durante uma troca de timbre, Volume (7),
+                                        # Pan (10), Expression (11), Reverb (91)
+                                        # e Chorus (93) que o timbre carrega não
+                                        # entram no modelo/arquivo nem passam
+                                        # pro sintetizador (decisão do Michel).
+                                        if getattr(self, '_captura_timbre', None):
                                             pass
                                         else:
                                             self.canais[ch_idx][prop_map[r_msg.control]] = r_msg.value
@@ -1956,13 +1996,14 @@ class MidiSequencer(wx.Frame):
                             import wx
                             wx.CallAfter(self.atualizar_status, True, True)
 
-                    # Durante uma troca de timbre, o Volume (CC7) e a Expression
-                    # (CC11) que o timbre carrega NÃO passam pro sintetizador -
-                    # senão o som muda de volume até o Play. O
-                    # _finalizar_captura_timbre reafirma o valor da coluna logo
-                    # depois.
+                    # Durante uma troca de timbre, Volume (CC7), Pan (CC10),
+                    # Expression (CC11), Reverb (CC91) e Chorus (CC93) que o
+                    # timbre carrega NÃO passam pro sintetizador - senão o som
+                    # muda de volume/efeito até o Play. O
+                    # _finalizar_captura_timbre reafirma o Volume da coluna
+                    # logo depois.
                     if (getattr(self, '_captura_timbre', None) and not getattr(r_msg, 'is_meta', False)
-                            and r_msg.type == 'control_change' and r_msg.control in (7, 11)):
+                            and r_msg.type == 'control_change' and r_msg.control in (7, 10, 11, 91, 93)):
                         continue
 
                     msg_to_send = r_msg
@@ -2080,14 +2121,14 @@ class MidiSequencer(wx.Frame):
         self._dsp_teclado['slots'][ch] = set(visto['slots'])
         self._dsp_teclado['vc'][ch] = set(visto['vc'])
 
-        # Reafirma o Volume (CC7) e a Expression (CC11) da COLUNA pro
-        # sintetizador - o timbre novo trouxe os valores dele, mas quem manda é
-        # a mixagem da tela.
+        # Reafirma o Volume (CC7) da COLUNA pro sintetizador. A Expression
+        # (CC11) NÃO é mais reenviada: o timbre novo não mexe mais nela (ver o
+        # bloqueio da rajada em on_midi_in) e reenviar o valor da coluna
+        # mudava a Expression do sintetizador (pedido do Michel).
         if getattr(self, 'output', None) and 0 <= ch < len(self.canais):
             c = self.canais[ch]
             try:
                 self.output.send(mido.Message('control_change', channel=ch, control=7, value=int(c.get("Volume", 100))))
-                self.output.send(mido.Message('control_change', channel=ch, control=11, value=int(c.get("Expression", 127))))
             except Exception:
                 pass
 
@@ -2132,8 +2173,11 @@ class MidiSequencer(wx.Frame):
             return
 
         if cc in (10, 91, 93):
-            c[{10: "Pan", 91: "Reverb", 93: "Chorus"}[cc]] = val
-            self.dirty = True
+            # Na rajada de troca de timbre (janela já aberta pelo Bank/PC),
+            # Pan/Reverb/Chorus do timbre não entram no modelo.
+            if getattr(self, '_captura_timbre', None) is None:
+                c[{10: "Pan", 91: "Reverb", 93: "Chorus"}[cc]] = val
+                self.dirty = True
             return
 
         # Sound Controllers → endereço Multi Part equivalente no VoiceCreator

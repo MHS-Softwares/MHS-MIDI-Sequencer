@@ -2297,9 +2297,15 @@ class DrumSetupDialog(wx.Dialog):
         import mido
         import threading
         
-        if getattr(self, 'preview_timer', None): 
-            self.preview_timer.cancel()
-            
+        # O timer da VOLTA ao kit do canal é separado do timer que solta a
+        # nota do preview (play_preview_direct). Antes os dois eram o mesmo
+        # (self.preview_timer): clicar "Aplicar" logo depois de mexer num
+        # controle (menos de 0,4s - o normal com Alt+A) cancelava a volta, e
+        # o canal ficava PRESO no kit doador no teclado (medido no teclado
+        # real em 12-11-2026 lendo o Bank/Patch do canal de volta).
+        if getattr(self, 'restore_timer', None):
+            self.restore_timer.cancel()
+
         ch = self.canal_idx
         b_atual = self.parent.canais[ch].get("Bank", 16256)
         p_atual = self.parent.canais[ch].get("Patch", 0)
@@ -2333,8 +2339,8 @@ class DrumSetupDialog(wx.Dialog):
                         self.reapply_preview_state()
                     except: pass
 
-            self.preview_timer = threading.Timer(0.4, restaurar_e_parar)
-            self.preview_timer.start()
+            self.restore_timer = threading.Timer(0.4, restaurar_e_parar)
+            self.restore_timer.start()
         except: pass
 
     def update_nota_label(self):

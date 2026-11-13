@@ -531,7 +531,10 @@ teclados Yamaha XG reais (como o PSR-SX600).
 **Aba 2 - Montagem de Kit (Custom)**: troca o som de uma peça por outro
 som de qualquer kit de bateria disponível no seu teclado/sintetizador:
 escolha a Peça Alvo, o Banco e o Patch do kit "doador", a Peça do kit
-doador, e clique em "Aplicar Mapeamento desta Peça".
+doador, e clique em "Aplicar Mapeamento desta Peça". Ao mexer no Banco,
+no Patch ou na Peça Doadora, o programa toca a peça do kit doador para
+você ouvir e depois devolve o canal ao kit dele; isso acontece mesmo que
+você clique em Aplicar logo em seguida (Alt+A).
 
 **Aba 3 - Edição via NRPN (Padrão MIDI)**: os mesmos 15 parâmetros
 principais da Aba 1 (Volume, Pan, Reverb, Chorus, Variation, Cutoff,
@@ -598,6 +601,17 @@ ao vivo pro teclado a cada mudança. Em ordem:
   o Portamento.
 
 Home/End/Page Up/Page Down ajustam o controle em foco em saltos maiores.
+
+**Trocando o timbre pelo teclado:** quando você escolhe um timbre novo no
+próprio teclado, o programa captura o Banco, o Patch, os parâmetros do
+timbre (filtro, ressonância, envelope, vibrato) e os efeitos de inserção,
+e coloca tudo no canal em foco. Os controles de mixagem que o teclado
+manda junto com o timbre - **Volume, Pan, Expressão, Reverb e Chorus** -
+são ignorados nessa hora: o som e a coluna do canal ficam como estavam,
+tanto para os controles comuns quanto para o SysEx do Multi Part. Ao
+final da troca o programa só reafirma o Volume da coluna. Fora da troca
+de timbre, girar o Reverb, o Chorus ou a Expressão no teclado continua
+valendo normalmente.
 
 ## 12.5 Propriedades do Canal (Tecla Menu/Aplicativo, ou clique direito)
 
