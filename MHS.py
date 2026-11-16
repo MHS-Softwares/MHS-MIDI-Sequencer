@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.8"
+VERSAO_APP = "4.9"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,28 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "4.9": (
+        "- Corrigido: a figura de compasso e os andamentos andavam para "
+        "frente a cada vez que o projeto era salvo. A cada salvamento o "
+        "programa gravava um XG System On no começo do arquivo e, ao "
+        "mesmo tempo, empurrava 120 ticks tudo o que vinha depois na "
+        "trilha mestre; ao reabrir, o XG System On era tirado mas o "
+        "empurrão ficava, e no salvamento seguinte vinha outro. As notas "
+        "não se mexiam, só a figura de compasso e os andamentos, então a "
+        "música parecia ter adiantado. Quem colocava 3/4 no tick 0 via a "
+        "figura sair do começo (tick 120, 240, 360...) conforme salvava e "
+        "reabria o arquivo. Agora o salvar não empurra mais nada: o espaço "
+        "de 120 ticks que o teclado precisa depois do XG System On passou "
+        "a fazer parte das posições dos SysEx que o próprio programa "
+        "grava, e a figura de compasso e os andamentos ficam exatamente "
+        "onde estão, por mais vezes que você salve, grave, copie, cole e "
+        "reabra.\n\n"
+        "- Atenção: um MIDI que já foi salvo várias vezes por uma versão "
+        "anterior continua com o deslocamento que já tinha acumulado; a "
+        "correção só impede que ele aumente. Se a figura de compasso do "
+        "seu arquivo saiu do começo, use Ctrl+Shift+M (Figura de Compasso) "
+        "e aplique de novo, global, para trazê-la de volta ao tick 0."
+    ),
     "4.8": (
         "- Novo: Bypass (Ctrl+B) nas telas de edição de DSP, na Variation "
         "e nas gavetas de Inserção, em qualquer gaveta. É a primeira "
@@ -7618,8 +7640,14 @@ class MidiSequencer(wx.Frame):
         novo_mid.ticks_per_beat = tpb
         tr0 = mido.MidiTrack()
         
-        sys_tick = 10 
-        param_tick = 140 
+        # Os SysEx de efeito (DSP) e de Drum Setup ficam 120 ticks (~50ms) depois do XG System On do
+        # cabeçalho, pro teclado real "respirar" depois do reset (antes o garantir_cabecalho_xg empurrava 120
+        # ticks o resto da trilha mestre a CADA salvar, e isso se acumulava: a figura de compasso e os
+        # andamentos andavam +120 ticks por salvamento enquanto as notas ficavam paradas - bug do ROMARIA.MID,
+        # 3/4 no tick 0). Agora o espaço é parte das posições geradas aqui e nada mais é empurrado.
+        GAP_XG = 120
+        sys_tick = 10 + GAP_XG
+        param_tick = 140 + GAP_XG
 
         if hasattr(self, 'dsp_cache') and self.dsp_cache.get('active', False):
             c = self.dsp_cache
@@ -7769,12 +7797,12 @@ class MidiSequencer(wx.Frame):
                     b = m['bank']
                     b_msb = min(127, b // 128)
                     syx_data = [0xF0, 0x43, 0x10, 0x4C, part_byte, orig_note, 0x70, b_msb, b % 128, m['patch'], m['dest_note'], 0xF7]
-                    meta_events.append([120, mido.Message.from_bytes(syx_data)])
+                    meta_events.append([120 + GAP_XG, mido.Message.from_bytes(syx_data)])
 
             if "DrumParams" in self.canais[ch]:
                 for (note, param_id), val in self.canais[ch]["DrumParams"].items():
                     syx_data = [0xF0, 0x43, 0x10, 0x4C, part_byte, note, param_id, val, 0xF7]
-                    meta_events.append([121, mido.Message.from_bytes(syx_data)])
+                    meta_events.append([121 + GAP_XG, mido.Message.from_bytes(syx_data)])
 
             # Guia 3 (NRPN puro, não é SysEx - carrega o canal no próprio CC,
             # então não precisa do part_byte por canal). 99=parâmetro,
@@ -7899,10 +7927,12 @@ class MidiSequencer(wx.Frame):
             
             # Insere no comecinho da música (posição 0 da Track 0)
             track_0.insert(0, xg_msg)
-            
-            # Dá um tempo de 120 ticks (~50ms) no próximo evento para o Yamaha conseguir "respirar"
-            if len(track_0) > 1:
-                track_0[1] = copiar_com_tempo(track_0[1], track_0[1].time + 120)
+
+            # NÃO empurra mais nada: o "fôlego" de 120 ticks pro Yamaha respirar depois do XG System On já está
+            # nas posições dos SysEx que o consolidar_projeto gera (GAP_XG). Antes este método somava 120 ticks
+            # ao próximo evento da trilha mestre - e como o consolidar_projeto tira o XG System On e o reinsere a
+            # cada salvar, o deslocamento se ACUMULAVA (+120 ticks por salvamento na figura de compasso e nos
+            # andamentos, as notas ficavam paradas). Bug do ROMARIA.MID, 3/4 no tick 0.
     def on_paste_repeat(self, event):
         from mhs_utils import falar_status
         if not getattr(self, 'event_clipboard', []):

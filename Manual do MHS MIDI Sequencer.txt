@@ -825,6 +825,14 @@ Define o Numerador e o Denominador (2, 4, 8, 16 ou 32) da fórmula de
 compasso, e se ela deve ser inserida só no ponto atual do cursor ou
 mudada globalmente.
 
+A figura de compasso (e os andamentos) ficam exatamente no tick em que
+você os colocou, por mais vezes que você salve, grave, copie, cole e
+reabra o arquivo. Nas versões anteriores à 4.9, cada salvamento empurrava
+120 ticks a figura de compasso e os andamentos (as notas não se mexiam, e a
+música parecia adiantar); um MIDI que já foi salvo várias vezes por essas
+versões continua com o deslocamento que acumulou. Para trazer a figura de
+compasso de volta ao começo, aplique-a de novo como global, com Ctrl+Shift+M.
+
 ## 12.18 Fade In / Fade Out (Ctrl+Shift+F)
 
 Exige um trecho marcado com I/O. Escolha entre Fade In e Fade Out, e se
