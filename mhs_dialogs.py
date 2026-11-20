@@ -5377,7 +5377,7 @@ BATERIA_CATEGORIAS = ["Todos"] + sorted(set(p[1] for p in BATERIA_PRESETS), key=
 
 class MidiEffectsDialog(wx.Dialog):
     def __init__(self, parent):
-        super().__init__(parent, title="Efeitos MIDI Offline (Arpejo, Delay e Strum/Harpa)", size=(450, 520))
+        super().__init__(parent, title="Efeitos Midi", size=(520, 700))
         self.parent = parent
         self.restaurado = False
         
@@ -5441,37 +5441,49 @@ class MidiEffectsDialog(wx.Dialog):
         
         self.tab_del.SetSizer(sz_del)
         
-        # --- TAB 3: HARPA / STRUM (NOVO) ---
+        # --- TAB 3: HARPA / STRUM / VIOLÃO ---
+        # Desenhos prontos de violão (mhs_violao.py): espalhar os acordes que já existem, rasgueados que refazem o
+        # ritmo de um acorde longo e dedilhados. Os ajustes abaixo da lista mudam só o que você quiser do desenho.
+        import mhs_violao
+        self._violao = mhs_violao
         self.tab_harp = wx.Panel(self.notebook)
         sz_harp = wx.BoxSizer(wx.VERTICAL)
-        
-        sz_harp.Add(wx.StaticText(self.tab_harp, label="Direção do Arrastão:"), 0, wx.ALL, 5)
-        self.cb_harp_dir = wx.ComboBox(self.tab_harp, choices=["Subindo (Grave para Agudo)", "Descendo (Agudo para Grave)", "Vai e Volta (Sobe e Desce)"], style=wx.CB_READONLY)
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Categoria:"), 0, wx.ALL, 5)
+        self.cb_harp_cat = wx.ComboBox(self.tab_harp, choices=mhs_violao.CATEGORIAS, style=wx.CB_READONLY)
+        self.cb_harp_cat.SetSelection(0)
+        sz_harp.Add(self.cb_harp_cat, 0, wx.EXPAND | wx.ALL, 5)
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Desenho (Seta Cima/Baixo escolhe; Espaço toca o trecho com o desenho aplicado):"), 0, wx.ALL, 5)
+        self.list_harp = wx.ListBox(self.tab_harp, style=wx.LB_SINGLE, name="Desenho de violão")
+        sz_harp.Add(self.list_harp, 1, wx.EXPAND | wx.ALL, 5)
+        self._harp_indices = []
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Direção da palhetada:"), 0, wx.ALL, 5)
+        self.cb_harp_dir = wx.ComboBox(self.tab_harp, choices=mhs_violao.DIRECOES, style=wx.CB_READONLY)
         self.cb_harp_dir.SetSelection(0)
         sz_harp.Add(self.cb_harp_dir, 0, wx.EXPAND | wx.ALL, 5)
-        
-        sz_harp.Add(wx.StaticText(self.tab_harp, label="Velocidade da Palhetada/Dedilhado:"), 0, wx.ALL, 5)
-        self.estilos_harp = [
-            ("Strum Hiper Rápido (Flamenco)", 8),
-            ("Strum Rápido (Violão Base)", 15),
-            ("Dedilhado Médio (Piano Roll)", 30),
-            ("Harpa Lenta (Cascata Mágica)", 60),
-            ("Sincronizado na Resolução do Grid Abaixo", 0)
-        ]
-        self.cb_harp_estilo = wx.ComboBox(self.tab_harp, choices=[e[0] for e in self.estilos_harp], style=wx.CB_READONLY)
-        self.cb_harp_estilo.SetSelection(1) # Padrão: Violão
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Velocidade da palhetada:"), 0, wx.ALL, 5)
+        self.cb_harp_estilo = wx.ComboBox(self.tab_harp, choices=[v[0] for v in mhs_violao.VELOCIDADES], style=wx.CB_READONLY)
+        self.cb_harp_estilo.SetSelection(0)
         sz_harp.Add(self.cb_harp_estilo, 0, wx.EXPAND | wx.ALL, 5)
-        
-        sz_harp.Add(wx.StaticText(self.tab_harp, label="Resolução do Grid (Apenas se sincronizado):"), 0, wx.ALL, 5)
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Resolução do Grid (apenas se sincronizada):"), 0, wx.ALL, 5)
         self.cb_harp_grid = wx.ComboBox(self.tab_harp, value=self.grids[6][0], choices=[g[0] for g in self.grids], style=wx.CB_READONLY)
-        self.cb_harp_grid.SetSelection(6) # Fusa por padrão para harpas longas
+        self.cb_harp_grid.SetSelection(6)
         sz_harp.Add(self.cb_harp_grid, 0, wx.EXPAND | wx.ALL, 5)
-        
+
+        sz_harp.Add(wx.StaticText(self.tab_harp, label="Naturalidade (0 = certinho como máquina, 50 = normal, 100 = bem solto):"), 0, wx.ALL, 5)
+        self.sp_harp_nat = wx.SpinCtrl(self.tab_harp, value="50", min=0, max=100)
+        sz_harp.Add(self.sp_harp_nat, 0, wx.EXPAND | wx.ALL, 5)
+
         sz_harp.Add(wx.StaticText(self.tab_harp, label="Extensão do Acorde (Clonar em Oitavas):"), 0, wx.ALL, 5)
         self.sp_harp_oct = wx.SpinCtrl(self.tab_harp, value="1", min=1, max=4)
         sz_harp.Add(self.sp_harp_oct, 0, wx.EXPAND | wx.ALL, 5)
-        
+
         self.tab_harp.SetSizer(sz_harp)
+        self._popular_lista_harpa()
 
         # --- TAB 4: BATERIA (PRESETS) (NOVO, trazido do MHS Style Creator) ---
         # Desenhos prontos de bateria pra INSERIR no canal em foco -
@@ -5519,9 +5531,12 @@ class MidiEffectsDialog(wx.Dialog):
         self.sp_del_rep.Bind(wx.EVT_SPINCTRL, self.on_change)
         self.sp_del_dec.Bind(wx.EVT_SPINCTRL, self.on_change)
         
+        self.cb_harp_cat.Bind(wx.EVT_COMBOBOX, self.on_harp_categoria_change)
+        self.list_harp.Bind(wx.EVT_LISTBOX, self.on_change)
         self.cb_harp_dir.Bind(wx.EVT_COMBOBOX, self.on_change)
         self.cb_harp_estilo.Bind(wx.EVT_COMBOBOX, self.on_change)
         self.cb_harp_grid.Bind(wx.EVT_COMBOBOX, self.on_change)
+        self.sp_harp_nat.Bind(wx.EVT_SPINCTRL, self.on_change)
         self.sp_harp_oct.Bind(wx.EVT_SPINCTRL, self.on_change)
 
         self.cb_bat_cat.Bind(wx.EVT_COMBOBOX, self.on_bat_categoria_change)
@@ -5539,6 +5554,20 @@ class MidiEffectsDialog(wx.Dialog):
     def on_change(self, event):
         self.aplicar_preview()
         event.Skip()
+
+    def _popular_lista_harpa(self):
+        # `self._harp_indices[i]` guarda o índice REAL em mhs_violao.PRESETS de cada linha da lista filtrada
+        cat = self.cb_harp_cat.GetStringSelection() or "Todos"
+        self._harp_indices = self._violao.indices_da_categoria(cat)
+        self.list_harp.Set([self._violao.rotulo_do_desenho(i) for i in self._harp_indices])
+        if self._harp_indices:
+            # já vem marcado o primeiro desenho de verdade (o "Personalizado" só aparece na categoria dele ou em Todos)
+            pos = 1 if cat == "Todos" and len(self._harp_indices) > 1 else 0
+            self.list_harp.SetSelection(pos)
+
+    def on_harp_categoria_change(self, event):
+        self._popular_lista_harpa()
+        self.on_change(event)
 
     def _popular_lista_bateria(self):
         # Reconstrói a lista de presets filtrada pela categoria escolhida -
@@ -5674,11 +5703,13 @@ class MidiEffectsDialog(wx.Dialog):
             params['decay'] = self.sp_del_dec.GetValue()
         elif tab == 2:
             tipo = "harpa"
-            estilo_val = self.estilos_harp[self.cb_harp_estilo.GetSelection()][1]
-            grid_val = self.grids[self.cb_harp_grid.GetSelection()][1]
-
-            params['direction'] = self.cb_harp_dir.GetSelection()
-            params['delay_ticks'] = estilo_val if estilo_val > 0 else grid_val
+            sel = self.list_harp.GetSelection()
+            params['preset_idx'] = self._harp_indices[sel] if sel != wx.NOT_FOUND and self._harp_indices else 0
+            params['direcao'] = self.cb_harp_dir.GetSelection()
+            vel = self._violao.VELOCIDADES[self.cb_harp_estilo.GetSelection()][1]
+            params['ms_corda'] = vel if isinstance(vel, float) else None
+            params['grade_ticks'] = self.grids[self.cb_harp_grid.GetSelection()][1] if vel == "grade" else 0
+            params['naturalidade'] = self.sp_harp_nat.GetValue()
             params['octaves'] = self.sp_harp_oct.GetValue()
         else:
             tipo = "bateria_preset"

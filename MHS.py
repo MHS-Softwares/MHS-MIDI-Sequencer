@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "4.9"
+VERSAO_APP = "5.0"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,55 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "5.0": (
+        "- Novo: Letra de Karaokê (Ctrl+Shift+L). Editor de sílabas "
+        "para colocar a letra dentro do MIDI, uma sílaba por nota da "
+        "melodia, no formato Lyrics dos arquivos de karaokê: o teclado "
+        "Yamaha mostra a letra na tela (o arquivo precisa ter a extensão "
+        ".mid) e os programas de karaokê do computador também leem. Ao "
+        "teclar Ctrl+Shift+L o programa pergunta qual canal é a melodia e "
+        "diz, para cada canal, se ele já tem letra ou não. A lista mostra só "
+        "as notas da melodia e o leitor de tela fala só a sílaba. F4 cola "
+        "a letra da música e o programa divide em sílabas e distribui nas "
+        "notas; F2 abre a letra inteira como texto para editar; T mostra "
+        "a letra só para leitura, como o exibidor do Winamp; A liga o leitor "
+        "automático, que fala cada sílaba na hora certa enquanto a música "
+        "toca; Enter edita a sílaba, L marca linha nova, I insere, Delete "
+        "apaga, V vai para a próxima nota sem letra. Para MIDIs com a letra "
+        "sincronizada mas sem melodia nas notas há o modo por tempo, com "
+        "C e N para colocar a letra tocando a música. Abrir um .kar também "
+        "funciona. F1 fala as teclas do editor.\n\n"
+        "- Novo: Tela do cantor (Ctrl+Shift+K): uma janela escura com a "
+        "frase atual em letra grande, a sílaba cantada em amarelo, a "
+        "próxima frase embaixo e pontinhos de entrada antes de cada frase. "
+        "Acompanha a reprodução e não tira o foco do teclado do programa. "
+        "+ e - mudam o tamanho.\n\n"
+        "- Alterado: Efeitos MIDI Offline (Ctrl+K) agora se chama Efeitos "
+        "Midi, e a aba Harpa / Strum foi refeita para soar como violão de "
+        "verdade. Em vez de dois desenhos, há cerca de trinta, em quatro "
+        "categorias: Espalhar os acordes (mantém o ritmo; natural, rápida, "
+        "lenta e aberta, só para baixo, só para cima, alternando, abafada, "
+        "flamenco, mão solta), Rasgueado (refaz o ritmo dos acordes longos: "
+        "folk, pop, rock, balada, pagode, reggae, country, valsa, bossa "
+        "nova, flamenco), Dedilhado (cordas separadas, Travis picking, "
+        "valsa, 16avos) e Harpa (cascata). A palhetada agora varia de "
+        "direção: para baixo no tempo e para cima no contratempo, ou como "
+        "você escolher, e a palhetada para cima é mais leve, com as cordas "
+        "graves mais fracas, como na mão do violonista, sem nunca tirar uma "
+        "nota que você gravou (o acorde pode ter até 6 cordas). O desenho "
+        "Personalizado respeita a sua dinâmica: cada nota sai com a "
+        "velocity que você gravou. A velocidade da "
+        "palhetada é em milissegundos reais por corda, então soa igual em "
+        "qualquer andamento e em qualquer MIDI. Há também a Naturalidade "
+        "(de 0, certinho como máquina, a 100, bem solto), com variações "
+        "pequenas de tempo e de força que são sempre as mesmas para os "
+        "mesmos acordes, e a pré-escuta soa igual ao que será gravado.\n\n"
+        "- Corrigido: depois de instalar com a opção Executar marcada, o "
+        "programa abria minimizado, sem tomar o primeiro plano. Agora o "
+        "instalador abre o programa e o traz para a frente, restaurando a "
+        "janela se ela vier minimizada, e o próprio programa também faz "
+        "isso ao abrir."
+    ),
     "4.9": (
         "- Corrigido: a figura de compasso e os andamentos andavam para "
         "frente a cada vez que o projeto era salvo. A cada salvamento o "
@@ -3107,9 +3156,11 @@ class MidiSequencer(wx.Frame):
         quant_off_item = tool_menu.Append(140, "Quantização Offline...\tCtrl+Q")
         quant_rt_item = tool_menu.Append(141, "Quantização Tempo Real (Input)...\tQ")
         humanize_item = tool_menu.Append(142, "Humanizar...\tH")
-        fx_midi_item = tool_menu.Append(143, "Efeitos MIDI Offline (Arpejo, Delay, Harpa, Bateria)...\tCtrl+K")
+        fx_midi_item = tool_menu.Append(143, "Efeitos Midi...\tCtrl+K")
         drum_setup_item = tool_menu.Append(198, "Drum Setup Yamaha XG...\tCtrl+D")
-        
+        tool_menu.Append(3201, "Letra do Karaokê (Editor de Sílabas)...\tCtrl+Shift+L")
+        tool_menu.Append(3202, "Mostrar / Fechar Tela de Letra para o Cantor\tCtrl+Shift+K")
+
         o_menu = wx.Menu()
         sysex_item = o_menu.Append(136, "Editor de SysEx Raiz...\tCtrl+Shift+Y")
         sysex_list_item = o_menu.Append(138, "Gerenciador de SysEx Existentes...\tCtrl+Shift+X")
@@ -3166,6 +3217,8 @@ class MidiSequencer(wx.Frame):
         self.Bind(wx.EVT_MENU, self.mark_selection_start, id=161)
         self.Bind(wx.EVT_MENU, self.mark_selection_end, id=162)
         self.Bind(wx.EVT_MENU, self.abrir_audio_guia, id=165)
+        self.Bind(wx.EVT_MENU, self.abrir_editor_letra, id=3201)
+        self.Bind(wx.EVT_MENU, self.alternar_tela_cantor, id=3202)
         self.Bind(wx.EVT_MENU, self.abrir_ripple_editing, id=127)
         self.Bind(wx.EVT_MENU, self.toggle_metronomo, id=117)
         self.Bind(wx.EVT_MENU, self.abrir_envelope_tempo, id=120)
@@ -3374,6 +3427,8 @@ class MidiSequencer(wx.Frame):
         self.Bind(wx.EVT_MENU, getattr(self, 'ir_para_inicio_selecao', lambda x: None), id=163)
         self.Bind(wx.EVT_MENU, getattr(self, 'ir_para_fim_selecao', lambda x: None), id=164)
         self.Bind(wx.EVT_MENU, getattr(self, 'abrir_audio_guia', lambda x: None), id=165)
+        self.Bind(wx.EVT_MENU, getattr(self, 'abrir_editor_letra', lambda x: None), id=3201)
+        self.Bind(wx.EVT_MENU, getattr(self, 'alternar_tela_cantor', lambda x: None), id=3202)
         self.Bind(wx.EVT_MENU, getattr(self, 'abrir_tempo_preciso', lambda x: None), id=230)
         self.Bind(wx.EVT_MENU, self.on_fechar_guia, id=180)
         self.Bind(wx.EVT_MENU, getattr(self, 'on_nova_guia', lambda x: None), id=181)
@@ -3623,6 +3678,74 @@ class MidiSequencer(wx.Frame):
         import wx
         wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
         wx.CallLater(200, lambda: falar_status("Event List Fechado"))
+    def abrir_editor_letra(self, event=None):
+        """Letra do Karaokê: escolhe o canal da melodia e abre o editor de sílabas (uma sílaba por nota)."""
+        from mhs_utils import falar_status
+        from mhs_letra_ui import EditorLetraDialog, escolher_canal_melodia
+        if not self.midi_file:
+            falar_status("Grave ou abra um MIDI com a melodia antes de colocar a letra.", imediato=True)
+            return
+        nomes = {i: c.get("Nome", "") for i, c in enumerate(self.canais)}
+        canal = escolher_canal_melodia(self, self.midi_file, self.canal_atual, nomes)
+        if canal is None:
+            wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
+            return
+        from mhs_letra import LetraModelo, ler_letra
+        from mhs_letra_ui import TEMPO
+        if canal == TEMPO:
+            fonte, sil = ler_letra(self.midi_file)
+            modelo = LetraModelo.por_tempo(sil, fonte)
+        else:
+            modelo = LetraModelo.do_midi(self.midi_file, canal)
+            if not modelo.letra_presa_as_notas():
+                pergunta = ("A letra deste MIDI não está presa às notas do canal %d: só %d de %d sílabas caem em cima de uma nota dele. "
+                            "Ela foi sincronizada só pelo tempo, e editar por nota jogaria a letra para as notas erradas. "
+                            "Editar pelo tempo dela? (Não = volta sem mexer em nada.)" % (canal + 1, modelo.coincidem, modelo.lidas))
+                falar_status(pergunta, imediato=True)
+                if wx.MessageBox(pergunta, "Letra do Karaokê", wx.YES_NO | wx.ICON_QUESTION, self) != wx.YES:
+                    wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
+                    return
+                canal = TEMPO
+                fonte, sil = ler_letra(self.midi_file)
+                modelo = LetraModelo.por_tempo(sil, fonte)
+        pre_state = {
+            "action": "Letra do Karaokê",
+            "midi_file": self.clone_midi_rapido(self.midi_file),
+            "canais": [c.copy() for c in self.canais],
+            "overrides": {k: v.copy() for k, v in self.overrides.items()},
+            "current_tempo": self.current_tempo,
+            "time_selection_start": self.time_selection_start,
+            "time_selection_end": self.time_selection_end,
+            "canais_selecionados": self.canais_selecionados.copy()
+        }
+        dlg = EditorLetraDialog(self, canal, modelo)
+        dlg.ShowModal()
+        if dlg.modificado:
+            if len(self.undo_stack) >= 50:
+                self.undo_stack.pop(0)
+            self.undo_stack.append(pre_state)
+            self.redo_stack.clear()
+        dlg.Destroy()
+        if getattr(self, 'janela_cantor', None):
+            self.janela_cantor.carregar()
+        wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
+        wx.CallLater(200, lambda: falar_status("Letra fechada"))
+
+    def alternar_tela_cantor(self, event=None):
+        """Mostra (ou fecha) a tela do cantor: a letra em letra grande, acompanhando a reprodução. Abre sem tirar o foco."""
+        from mhs_utils import falar_status
+        from mhs_letra_ui import JanelaCantor
+        if getattr(self, 'janela_cantor', None):
+            self.janela_cantor.Close()
+            falar_status("Tela do cantor fechada.", imediato=True)
+            return
+        if not self.midi_file:
+            falar_status("Abra um MIDI com letra primeiro.", imediato=True)
+            return
+        self.janela_cantor = JanelaCantor(self)
+        self.janela_cantor.ShowWithoutActivating()
+        falar_status("Tela do cantor aberta." if self.janela_cantor.linhas else "Tela do cantor aberta, mas este MIDI ainda não tem letra.", imediato=True)
+
     def repetir_status_tab(self, event):
         self.atualizar_status(falar_canal=True)
 
@@ -6853,6 +6976,10 @@ class MidiSequencer(wx.Frame):
 
         tpb = max(1, getattr(self.midi_file, 'ticks_per_beat', 480))
         eventos_processados = 0
+        mapa_tempo_efeito = None
+        if tipo_efeito == 'harpa':
+            import mhs_violao
+            mapa_tempo_efeito = mhs_violao.MapaTempo.de_midi(self.midi_file)       # antes de mexer nas trilhas
         
         for i, track in enumerate(self.midi_file.tracks):
             if not any(getattr(msg, 'channel', None) in canais_alvo for msg in track):
@@ -7038,87 +7165,13 @@ class MidiSequencer(wx.Frame):
                         cur_tick += grid
                         p_idx += 1
 
-            # === MOTOR DA HARPA / STRUM (NOVO) ===
+            # === MOTOR DA HARPA / STRUM / VIOLÃO ===
+            # O motor está em mhs_violao.py (sem janela): palhetada em milissegundos (não depende do tempo nem dos ticks
+            # por tempo do arquivo), direção que varia de verdade, desenhos prontos de violão.
             elif tipo_efeito == 'harpa':
-                delay_ticks = params['delay_ticks']
-                direction = params['direction'] # 0: Subindo, 1: Descendo, 2: Vai e Volta
-                octaves = params['octaves']
-                
-                # Tolerância para considerar que notas são "do mesmo acorde" (tocadas quase juntas)
-                chord_tolerance = 40 
-                
-                i_nota = 0
-                while i_nota < len(notas_originais):
-                    ev = notas_originais[i_nota]
-                    start_tick = ev['start']
-                    
-                    # Coleta todas as notas que formam este acorde específico
-                    chord_notes = [ev]
-                    j = i_nota + 1
-                    while j < len(notas_originais):
-                        next_ev = notas_originais[j]
-                        if next_ev['start'] - start_tick <= chord_tolerance:
-                            chord_notes.append(next_ev)
-                            j += 1
-                        else:
-                            break
-                    
-                    # Só aplicamos harpa se o usuário tocou um acorde (2 ou mais notas juntas)
-                    # Ou se ele pediu para espalhar uma nota só por várias oitavas!
-                    if len(chord_notes) >= 2 or octaves > 1:
-                        
-                        # Remove os eventos originais do acorde (já que eles estão sem efeito na trilha principal)
-                        # Como eles já não estão na lista 'novos_eventos', a gente só ignora eles e cria os novos
-                        
-                        expanded_chord = []
-                        for oct_idx in range(octaves):
-                            for ce in chord_notes:
-                                nota_real = ce['msg_on'].note + (oct_idx * 12)
-                                # Trava a nota no limite MIDI para não bugar o Yamaha
-                                if 0 <= nota_real <= 127:
-                                    # Cria uma cópia inteira do dicionário e das mensagens Mido
-                                    m_on_copy = ce['msg_on'].copy(note=nota_real)
-                                    m_off_copy = ce['msg_off'].copy(note=nota_real)
-                                    
-                                    novo_ce = {
-                                        'start': ce['start'],
-                                        'end': ce['end'],
-                                        'msg_on': m_on_copy,
-                                        'msg_off': m_off_copy
-                                    }
-                                    expanded_chord.append(novo_ce)
-                        
-                        # Ordena o acorde pelo tom (do grave pro agudo)
-                        expanded_chord.sort(key=lambda x: x['msg_on'].note)
-                        
-                        # Se for "Descendo", invertemos a lista inteira
-                        if direction == 1:
-                            expanded_chord.reverse()
-                        # Se for "Vai e Volta", simulamos uma palhetada dupla contínua
-                        elif direction == 2:
-                            meio = len(expanded_chord) // 2
-                            subida = expanded_chord[:meio]
-                            descida = expanded_chord[meio:]
-                            descida.reverse()
-                            expanded_chord = subida + descida
-                            
-                        # Espalha as notas no tempo simulando a palheta nas cordas!
-                        for idx, ce in enumerate(expanded_chord):
-                            offset = idx * delay_ticks
-                            
-                            # Desloca a nota pra frente (mantendo a mesma duração original de cada uma)
-                            novo_start = ce['start'] + offset
-                            novo_end = ce['end'] + offset
-                            
-                            novos_eventos.append((novo_start, 1, ce['msg_on']))
-                            novos_eventos.append((novo_end, 0, ce['msg_off']))
-                            eventos_processados += 1
-                    else:
-                        # Se for só uma nota sozinha e sem oitava extra, deixa ela quieta e joga pros novos_eventos
-                        novos_eventos.append((chord_notes[0]['start'], 1, chord_notes[0]['msg_on']))
-                        novos_eventos.append((chord_notes[0]['end'], 0, chord_notes[0]['msg_off']))
-                    
-                    i_nota = j # Avança o loop para depois do acorde que acabamos de processar
+                import mhs_violao
+                novos_eventos, n_gerados = mhs_violao.processar(notas_originais, params, tpb, mapa_tempo_efeito, ed_tick)
+                eventos_processados += n_gerados
 
             # === MOTOR DO PRESET DE BATERIA (NOVO, trazido do MHS Style
             # Creator) === INSERE um desenho pronto no canal em foco, a
@@ -8824,6 +8877,9 @@ if __name__ == '__main__':
     arquivo_inicial = sys.argv[1] if len(sys.argv) > 1 else None
     frame = MidiSequencer(None, f"MHS MIDI Sequencer {VERSAO_APP}", arquivo_inicial)
     frame.Show()
+    # Janela na frente (e restaurada, se estiver minimizada) logo na abertura - ver mhs_janela.py.
+    import mhs_janela
+    mhs_janela.agendar(frame)
     # Tela de Changelog, só na primeira vez que uma versão nova é aberta.
     wx.CallAfter(frame.mostrar_changelog_se_necessario)
     # Checagem de atualização (opcional, ver aba "Atualizações" em

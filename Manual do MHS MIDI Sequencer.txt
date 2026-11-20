@@ -139,7 +139,7 @@ Pontos importantes:
   Propriedades do Canal, Metrônomo dentro de Preferências) fala o nome do
   parâmetro e o novo valor a cada mudança de slider/spin, e várias também
   tocam um preview sonoro imediato daquele parâmetro.
-- Onde há abas (Drum Setup, Preferências, Efeitos MIDI), **Ctrl+Tab**
+- Onde há abas (Drum Setup, Preferências, Efeitos Midi), **Ctrl+Tab**
   troca de aba e o programa fala o nome da aba nova.
 - Diálogos de erro e confirmações usam sempre linguagem direta, nunca só
   cor/ícone - por exemplo, ao tentar salvar durante uma gravação, o
@@ -384,6 +384,8 @@ estão na seção 13.
 - Ctrl+Z: Desfazer
 - Ctrl+Shift+Z: Refazer
 - Ctrl+E: Lista de Eventos (Event List)
+- Ctrl+Shift+L: Letra do Karaokê (editor de sílabas)
+- Ctrl+Shift+K: mostrar/fechar a tela de letra para o cantor
 
 ## Áudio Guia (playback de referência)
 
@@ -399,7 +401,7 @@ estão na seção 13.
 - Ctrl+Q: Quantização Offline
 - Q: Quantização em Tempo Real (input/gravação)
 - H: Humanizar
-- Ctrl+K: Efeitos MIDI Offline (Arpejo/Delay/Harpa/Bateria)
+- Ctrl+K: Efeitos Midi (Arpejo, Delay, Harpa/Strum de violão, Bateria)
 - Shift+E: Envelope de Automação de CC
 - Shift+C: Envelope de Tempo (BPM)
 - Ctrl+Shift+F: Fade In/Fade Out
@@ -506,7 +508,7 @@ projeto; o efeito de Inserção da voz também não é aplicado.
 - **Quantização Offline...** (Ctrl+Q) - ver seção 12.6.
 - **Quantização Tempo Real (Input)...** (Q) - ver seção 12.7.
 - **Humanizar...** (H) - ver seção 12.8.
-- **Efeitos MIDI Offline (Arpejo, Delay, Harpa, Bateria)...** (Ctrl+K) -
+- **Efeitos Midi...** (Ctrl+K) -
   ver seção 12.9 (Arpejo/Delay/Harpa exigem um trecho marcado com I/O;
   Bateria não).
 - **Drum Setup Yamaha XG...** (Ctrl+D) - ver seção 12.1.
@@ -668,7 +670,7 @@ Velocity Máxima (até 127). O preview (Espaço) sempre toca exatamente o
 mesmo resultado que será gravado ao confirmar - não é sorteado de novo a
 cada teste.
 
-## 12.9 Efeitos MIDI Offline - Arpejo, Delay, Harpa e Bateria (Ctrl+K)
+## 12.9 Efeitos Midi - Arpejo, Delay, Harpa/Strum e Bateria (Ctrl+K)
 
 Quatro abas (Ctrl+Tab troca):
 
@@ -677,10 +679,45 @@ Quatro abas (Ctrl+Tab troca):
   Duração/Gate em porcentagem. Exige um trecho marcado com I/O.
 - **MIDI Delay**: Resolução do eco, Número de repetições, Decaimento de
   velocidade a cada repetição. Exige um trecho marcado com I/O.
-- **Harpa / Strum**: Direção do arrastão (Subindo / Descendo / Vai e
-  Volta), Velocidade da palhetada (5 estilos, incluindo sincronizado com
-  o grid), Resolução do grid, Extensão do acorde em oitavas (1 a 4).
-  Exige um trecho marcado com I/O.
+- **Harpa / Strum** (violão e harpa): transforma acordes (notas tocadas
+  juntas) em palhetadas e dedilhados. Exige um trecho marcado com I/O.
+  - **Categoria** e **Desenho** (lista; Seta Cima/Baixo escolhe, Espaço
+    toca o trecho com o desenho aplicado):
+    - *Espalhar os acordes (mantém o ritmo)*: palhetada natural, rápida
+      (pop/sertanejo), lenta e aberta (balada), só para baixo (rock), só
+      para cima, baixo e cima alternando, abafada (palm mute), flamenco,
+      mão solta.
+    - *Rasgueado (refaz o ritmo dos acordes longos)*: folk clássico, pop
+      em colcheias, rock firme, balada suave, pagode simples, reggae/ska,
+      country (boom-chick), valsa (3 tempos), bossa-nova simplificada,
+      flamenco em 16avos. O desenho se repete até o acorde acabar; um
+      acorde curto (menos de 1,5 tempo) só é espalhado.
+    - *Dedilhado (cordas separadas)*: básico, subindo e descendo,
+      valsa, Travis picking, rápido em 16avos. As cordas ficam soando até
+      o fim do acorde.
+    - *Harpa (cascata)*: média, lenta, que sobe e desce a cada acorde.
+    - *Personalizado*: só vale o que você ajustar abaixo. Respeita a sua
+      dinâmica: cada nota sai com a velocity exata que você gravou; só o
+      tempo da palhetada muda.
+  - **Direção da palhetada**: Do desenho / Automática pelo tempo da
+    batida (para baixo no tempo, para cima no contratempo; se todos os
+    acordes caem no mesmo ponto do tempo, ela alterna) / Sempre para baixo
+    (grave para agudo) / Sempre para cima (agudo para grave; as cordas
+    graves continuam tocando, só um pouco mais fracas, como na mão do
+    violonista; nenhuma nota gravada é tirada, até 6 cordas) / Alternar a
+    cada acorde.
+  - **Velocidade da palhetada**: Do desenho, ou 5, 9, 16, 30 ou 60 ms por
+    corda, ou sincronizada na resolução do grid. É em milissegundos reais:
+    soa igual em qualquer MIDI, qualquer que seja o tempo da música e os
+    ticks por tempo do arquivo.
+  - **Naturalidade** (0 a 100): 0 = certinho como máquina, 50 = normal,
+    100 = bem solto. Controla as pequenas variações de tempo e de força.
+    As variações são sempre as mesmas para os mesmos acordes - o preview
+    soa igual ao resultado que será gravado.
+  - **Extensão do acorde**: clona o acorde em até 4 oitavas.
+  Na palhetada (menos no Personalizado) a 1ª corda é a mais forte e as
+  outras vão diminuindo, a mão acelera um pouco durante a palhetada, e a
+  palhetada para cima é mais leve. As cordas terminam junto, no fim do acorde original.
 - **Bateria (Presets)**: 147 desenhos prontos de bateria (rufos de
   caixa/prato/tom, viradas de tom, brincadeiras de hi-hat/prato,
   combinados), organizados por Categoria - escolha a categoria, Seta
@@ -1009,6 +1046,110 @@ reprodução.
 - **Esc** - fecha a Lista de Eventos (salvando/reconstruindo se algo foi
   modificado).
 - **Shift+Esc** - só cancela seleções, sem fechar a tela.
+
+---
+
+# 13b. Letra de Karaokê (Ctrl+Shift+L e Ctrl+Shift+K)
+
+A letra fica DENTRO do MIDI, uma sílaba por nota da melodia, no formato
+"Lyrics" dos arquivos de karaokê. O teclado Yamaha mostra a letra na tela
+(o arquivo precisa ter a extensão .mid). Programas de karaokê do computador
+também leem. Abrir um .kar (Soft Karaoke) também funciona: a letra aparece
+no editor e, ao salvar, vira eventos Lyrics.
+
+## Editor de sílabas (Ferramentas > Letra do Karaokê..., Ctrl+Shift+L)
+
+1. O programa pergunta qual canal é a melodia. O canal selecionado já vem
+   marcado; se ele não tiver notas, o programa sugere o canal pelo nome
+   (Melodia, Vocal, Voz...) ou o canal 4. Aperte Enter para aceitar.
+2. A lista mostra SÓ AS NOTAS da melodia, e cada linha é a sílaba da nota.
+   O leitor de tela fala apenas a sílaba (ou "sem letra"; "nova linha,
+   pe" quando a sílaba abre uma frase). A nota toca ao navegar, como no
+   Event List.
+3. Teclas do editor:
+   - Setas, PageUp/PageDown, Home/End: navegar.
+   - **F4**: colar a letra da música (uma frase por linha). O programa
+     divide em sílabas e distribui nas notas a partir da nota atual.
+     Hífen separa as sílabas à mão (co-ra-ção). O símbolo _ pula uma nota.
+     **Ctrl+V** cola direto da área de transferência.
+   - **T**: mostra a letra para LEITURA, como o exibidor de letras do
+     Winamp: palavras inteiras, sem hífens, uma frase por linha, sem as
+     notas puladas. É somente leitura (dá para navegar com as setas,
+     selecionar e copiar). O cursor abre na palavra da nota em que você
+     estava. F6 fala quantas linhas e palavras; Esc ou Enter fecha.
+   - **F2**: abre a letra inteira como TEXTO PARA EDITAR, num bloco de notas:
+     uma frase por linha, hífen entre as sílabas (co-ra-ção pe-de) e _ nas
+     notas sem sílaba. Dá para ler as palavras e as linhas e editar à
+     vontade (inclusive apagar ou escrever frases novas). O cursor já abre
+     na sílaba da nota em que você estava. **Ctrl+Enter** aplica: o
+     programa reencaixa as sílabas nas notas, em ordem. **Esc** cancela;
+     **F6** fala quantas sílabas e quantas notas. Se o texto tiver mais
+     sílabas do que a melodia tem notas, o programa avisa quantas faltam e
+     não aplica nada. Com a letra vazia, o texto começa na nota atual.
+   - **Enter**: editar a sílaba da nota. Hífen no fim ("co-") = a palavra
+     continua na próxima sílaba; barra no começo ("/pe") = abre linha
+     nova; vazio = apaga.
+   - **Delete**: apaga a sílaba da nota. **Ctrl+Delete**: apaga e puxa as
+     seguintes uma nota para trás.
+   - **I** (ou Ctrl+I, como no Event List; ou Insert): insere uma sílaba na
+     nota e empurra as seguintes uma nota para a frente (cabe se existir
+     uma nota sem letra mais adiante). Quem usa o NVDA: o Insert é a tecla
+     modificadora do NVDA e pode não chegar ao programa, por isso existe o I.
+   - **L**: liga ou desliga "linha nova" na sílaba.
+   - **V** / Shift+V: vai para a próxima / anterior nota sem letra.
+   - **Espaço**: toca a partir da nota selecionada. Ctrl+Espaço pausa.
+   - **A**: liga ou desliga o LEITOR AUTOMÁTICO. Ligado, enquanto a música
+     toca o leitor de tela fala cada sílaba na hora certa (como o exibidor
+     de letras do Winamp) e a seleção da lista acompanha a música. O
+     programa lembra se estava ligado. Só fala nas notas que têm sílaba.
+   - **Ctrl+Z**: desfaz dentro do editor. **F1**: fala as teclas.
+   - **Esc**: fecha e grava a letra no MIDI. O Ctrl+Z do programa desfaz
+     a letra inteira de uma vez.
+4. Salve com Ctrl+S como sempre. Para o teclado mostrar a letra, o arquivo
+   precisa terminar em .mid (use Salvar como e escolha o filtro MIDI).
+
+## Modo por tempo (MIDI sem melodia gravada, ou com a letra sincronizada à parte)
+
+Muitos MIDIs de karaokê têm a letra no tempo certo, mas sem melodia nas notas
+(os canais só têm acompanhamento). Para esses, na pergunta do canal escolha
+a primeira opção, "Sem melodia gravada: editar a letra pelo tempo". Se o
+arquivo já tem letra que não bate com as notas do canal escolhido, o programa
+pergunta se você quer editar pelo tempo dela (Não = não mexe em nada).
+
+Aqui a lista tem as próprias palavras da letra, cada uma no seu tempo, e o
+leitor de tela fala só a palavra. Teclas (além das de sempre: Enter edita,
+L linha nova, F2 texto, T leitura, A leitor automático, Ctrl+Z, Espaço, Esc):
+   - **Delete**: remove a sílaba da lista.
+   - **I** (ou Ctrl+I, ou Insert): coloca uma sílaba NO PONTO DO CURSOR de
+     reprodução (ou no ponto de agora, se a música estiver tocando). Digite
+     a sílaba e Enter.
+   - **Shift+I** (ou Ctrl+Insert): coloca uma sílaba entre a selecionada e
+     a próxima.
+   - **C** e **N**: colocar a letra tocando a música. C pede o texto da música
+     (uma frase por linha; as palavras são divididas em sílabas, ou use
+     hífen). Aperte Espaço para tocar e **N** a cada sílaba: ela é colocada
+     no ponto em que você apertou. O programa fala a sílaba colocada e a
+     próxima. Ctrl+Z desfaz a última colocação e devolve a sílaba à fila.
+   - **M**: leva a sílaba selecionada para o ponto atual (toque a música e
+     aperte M na hora certa).
+   - **Alt + seta esquerda/direita**: adianta/atrasa a sílaba 10 ticks;
+     com Shift, 1 tick; com Ctrl, um tempo. A reprodução volta para ela.
+   - **F2** (texto com hífens): só troca o texto das sílabas que já existem;
+     se mudar a QUANTIDADE de palavras o programa recusa e explica (cada
+     palavra tem o seu tempo; para incluir ou tirar use I e Delete).
+   - **F4** não se aplica aqui: use C.
+
+Letra com aspas curvas, reticências ou travessão é salva sem erro: o MIDI só
+guarda texto em latin-1, então o programa troca por aspas retas, três
+pontos e hífen (o que não tem jeito vira "?").
+
+## Tela do cantor (Ferramentas > Mostrar / Fechar Tela de Letra, Ctrl+Shift+K)
+
+Abre uma janela escura com a frase atual em letra grande, a sílaba cantada
+em amarelo, a próxima frase embaixo e pontinhos de entrada nos últimos
+4 segundos antes de cada frase. Ela acompanha a reprodução e NÃO tira o foco
+do teclado do programa. Na janela: + e - mudam o tamanho, F5 recarrega a
+letra, Esc fecha.
 
 ---
 
