@@ -350,6 +350,35 @@ def baixar_e_extrair_ins(url, pasta_destino, timeout=60):
         raise ValueError("O arquivo baixado não contém nenhum .ins.")
     return gravados
 
+def midi_para_formato0(mid):
+    """Devolve uma CÓPIA do MIDI no formato 0 (uma única trilha com tudo).
+
+    As trilhas são fundidas por tempo absoluto (ordem estável: no mesmo tick
+    vale a ordem original das trilhas, então SysEx/Program Change/notas de
+    abertura continuam na mesma sequência). Só o primeiro nome de trilha
+    sobrevive - o formato 0 não tem como separar nomes por trilha. O arquivo
+    original (mid) nunca é alterado."""
+    novo = mido.MidiFile(type=0, ticks_per_beat=getattr(mid, 'ticks_per_beat', 480))
+    fundida = mido.merge_tracks([[m.copy() for m in t] for t in mid.tracks])
+    trilha = mido.MidiTrack()
+    achou_nome = False
+    atraso = 0
+    for msg in fundida:
+        if msg.type == 'track_name':
+            if achou_nome:
+                atraso += msg.time
+                continue
+            achou_nome = True
+        if atraso:
+            msg = msg.copy(time=msg.time + atraso)
+            atraso = 0
+        trilha.append(msg)
+    if atraso and trilha:
+        trilha[-1] = trilha[-1].copy(time=trilha[-1].time + atraso)
+    novo.tracks.append(trilha)
+    return novo
+
+
 def copiar_com_tempo(msg, tempo):
     # Cópia de uma mensagem MIDI com outro "time" (delta). msg.copy(time=x)
     # faz o mido revalidar a mensagem INTEIRA (~7,5 us cada, medido); copy()

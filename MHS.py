@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "5.0"
+VERSAO_APP = "5.1"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,16 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "5.1": (
+        "- Novo: Salvar como tipo \"MIDI formato 0 - uma trilha só (.mid)\". "
+        "O programa junta todas as trilhas numa só, mantendo notas, timbres, "
+        "controles, SysEx, andamento e letras exatamente nos mesmos instantes "
+        "(só se perde a separação em trilhas e os nomes de trilha, exceto o "
+        "primeiro), para teclados e programas que só leem formato 0.\n"
+        "- Depois de salvar em formato 0, o Ctrl+S continua gravando em "
+        "formato 0. O mesmo vale ao abrir um MIDI que já esteja em formato 0, "
+        "mesmo feito por outro programa."
+    ),
     "5.0": (
         "- Novo: Letra de Karaokê (Ctrl+Shift+L). Editor de sílabas "
         "para colocar a letra dentro do MIDI, uma sílaba por nota da "
@@ -633,7 +643,7 @@ class InserirCompassosDialog(wx.Dialog):
 # .kar (karaokê) é um arquivo MIDI padrão com a letra em eventos de texto: abre e salva igual a um .mid
 WILDCARD_ABRIR_MIDI = ("MIDI e Karaokê (*.mid;*.midi;*.kar)|*.mid;*.midi;*.kar|MIDI (*.mid;*.midi)|*.mid;*.midi|"
                        "Karaokê (*.kar)|*.kar|Todos os arquivos (*.*)|*.*")
-WILDCARD_SALVAR_MIDI = "MIDI (*.mid)|*.mid|Karaokê (*.kar)|*.kar"
+WILDCARD_SALVAR_MIDI = "MIDI (*.mid)|*.mid|Karaokê (*.kar)|*.kar|MIDI formato 0 - uma trilha só (*.mid)|*.mid"
 
 
 class MidiSequencer(wx.Frame):
@@ -2736,7 +2746,7 @@ class MidiSequencer(wx.Frame):
         if res == wx.ID_YES:
             if self.current_midi_path:
                 try:
-                    self.salvar_midi(self.current_midi_path)
+                    self.salvar_midi(self.current_midi_path, self._caminho_e_formato0(self.current_midi_path))
                     return True
                 except:
                     return False
@@ -3822,6 +3832,13 @@ class MidiSequencer(wx.Frame):
             self.current_midi_path = path
             self.midi_file = mido.MidiFile(path)
 
+            # MIDI que já veio em formato 0 (de qualquer programa): o Ctrl+S
+            # continua gravando em formato 0 em vez de virar formato 1.
+            if not hasattr(self, 'formato0_caminhos'):
+                self.formato0_caminhos = set()
+            (self.formato0_caminhos.add if self.midi_file.type == 0 else self.formato0_caminhos.discard)(
+                os.path.normcase(os.path.abspath(path)))
+
             # Áudio Guia deste projeto: procura o arquivo-irmão ".mhsaudio"
             # ao lado do .mid (ver caminho_sidecar_audio/salvar_config_audio).
             # Achou e o áudio referenciado ainda existe -> carrega sozinho.
@@ -3900,12 +3917,16 @@ class MidiSequencer(wx.Frame):
         self.garantir_cabecalho_xg() # <--- A vacina do Yamaha XG!
         
         try:
-            self.midi_file.save(self.current_midi_path)
+            if self._caminho_e_formato0(self.current_midi_path):
+                from mhs_utils import midi_para_formato0
+                midi_para_formato0(self.midi_file).save(self.current_midi_path)
+            else:
+                self.midi_file.save(self.current_midi_path)
             self.dirty = False
             self.atualizar_titulo()
             self.add_to_recent(self.current_midi_path)
             from mhs_utils import falar_status
-            falar_status("Projeto salvo.", imediato=True)
+            falar_status("Projeto salvo em formato 0." if self._caminho_e_formato0(self.current_midi_path) else "Projeto salvo.", imediato=True)
         except Exception as e:
             from mhs_utils import falar_status
             falar_status(f"Erro ao salvar: {e}", imediato=True)
@@ -3920,17 +3941,29 @@ class MidiSequencer(wx.Frame):
                            defaultFile=os.path.basename(atual), wildcard=WILDCARD_SALVAR_MIDI,
                            style=wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT) as fd:
             # abriu um .kar? já sugere salvar como .kar (o arquivo é o mesmo formato MIDI, só muda a extensão)
-            fd.SetFilterIndex(1 if atual.lower().endswith('.kar') else 0)
+            # estava salvo como formato 0? sugere de novo o tipo "formato 0"
+            if self._caminho_e_formato0(atual):
+                fd.SetFilterIndex(2)
+            else:
+                fd.SetFilterIndex(1 if atual.lower().endswith('.kar') else 0)
             if fd.ShowModal() == wx.ID_OK:
                 path = fd.GetPath()
+                formato0 = fd.GetFilterIndex() == 2
+                if not os.path.splitext(path)[1]:
+                    path += '.kar' if fd.GetFilterIndex() == 1 else '.mid'
                 self.config['pasta_projetos'] = os.path.dirname(path)
-                wx.CallAfter(self.processar_salvamento_midi, path)
+                wx.CallAfter(self.processar_salvamento_midi, path, formato0)
 
-    def processar_salvamento_midi(self, path):
-        self.salvar_midi(path)
+    def _caminho_e_formato0(self, path):
+        """True se este caminho foi salvo por último como MIDI formato 0
+        (aí o Ctrl+S continua gravando em formato 0, não volta pro 1)."""
+        return bool(path and os.path.normcase(os.path.abspath(path)) in getattr(self, 'formato0_caminhos', ()))
+
+    def processar_salvamento_midi(self, path, formato0=False):
+        self.salvar_midi(path, formato0)
         wx.CallLater(100, lambda: getattr(self, 'panel', None) and self.panel.SetFocus())
 
-    def salvar_midi(self, path):
+    def salvar_midi(self, path, formato0=False):
         try:
             if self.gravando:
                 self.gravando = False
@@ -3957,7 +3990,13 @@ class MidiSequencer(wx.Frame):
                     new_track.append(msg)
                 novo_mid.tracks[i] = new_track
 
+            if formato0:
+                from mhs_utils import midi_para_formato0
+                novo_mid = midi_para_formato0(novo_mid)
             novo_mid.save(path)
+            if not hasattr(self, 'formato0_caminhos'):
+                self.formato0_caminhos = set()
+            (self.formato0_caminhos.add if formato0 else self.formato0_caminhos.discard)(os.path.normcase(os.path.abspath(path)))
             self.current_midi_path = path
             self.dirty = False
             self.atualizar_titulo()
@@ -3968,7 +4007,7 @@ class MidiSequencer(wx.Frame):
             self.salvar_config_audio()
 
             from mhs_utils import falar_status
-            falar_status("Arquivo salvo com sucesso!", imediato=True)
+            falar_status("Arquivo salvo em MIDI formato 0 (uma trilha só)!" if formato0 else "Arquivo salvo com sucesso!", imediato=True)
             
         except Exception as e:
             from mhs_utils import falar_status

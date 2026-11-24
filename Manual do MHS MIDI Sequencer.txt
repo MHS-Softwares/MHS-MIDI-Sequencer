@@ -433,7 +433,14 @@ estão na seção 13.
 - **Carregar MIDI** (Ctrl+O).
 - **Arquivos Recentes** - submenu com os últimos arquivos abertos.
 - **Salvar** (Ctrl+S).
-- **Salvar como...** (Ctrl+Shift+S).
+- **Salvar como...** (Ctrl+Shift+S). No campo "Salvar como tipo" há três opções:
+  MIDI (.mid), Karaokê (.kar) e **MIDI formato 0 - uma trilha só (.mid)**. O formato 0
+  junta todas as trilhas numa só, mantendo todas as notas, timbres, controles, SysEx,
+  andamento e letras exatamente nos mesmos instantes; o que se perde é a separação em
+  trilhas (e os nomes de trilha, exceto o primeiro). Serve para teclados e programas que
+  só leem formato 0. Depois de salvar assim, o Ctrl+S desse arquivo continua gravando em
+  formato 0, até você usar Salvar como com outro tipo. O mesmo vale ao abrir um MIDI que já
+  esteja em formato 0 (mesmo feito por outro programa): o Ctrl+S mantém o formato 0.
 
 ---
 
