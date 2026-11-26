@@ -3,3 +3,4 @@ mido
 python-rtmidi
 sounddevice
 miniaudio
+accessible_output2

@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "5.1"
+VERSAO_APP = "5.2"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,9 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "5.2": (
+        "- Atualização do programa mais simples: a janela \"Atualização disponível\" agora mostra as novidades da versão nova num campo só de leitura (o foco começa nele; leia com as setas e use Tab para chegar aos botões). Ao escolher \"Baixar e instalar\", o programa baixa, confere o arquivo, pergunta se quer salvar o que estiver aberto, fecha, instala a versão nova sozinho, sem as telas do instalador e sem perguntar a pasta, e abre a versão nova em primeiro plano. Se algo der errado na instalação aparece uma caixa de mensagem com o motivo. Como você já leu as novidades na janela, a tela de Changelog não repete a mesma lista quando a versão nova abrir. (Novidades na janela e instalação logo após o download: contribuição de Gabriel Schuck; instalador silencioso: MHS Gerenciador Python.)"
+    ),
     "5.1": (
         "- Novo: Salvar como tipo \"MIDI formato 0 - uma trilha só (.mid)\". "
         "O programa junta todas as trilhas numa só, mantendo notas, timbres, "
@@ -5127,7 +5130,19 @@ class MidiSequencer(wx.Frame):
     def _avisar_atualizacao_disponivel(self, info):
         # Janela de atualização: baixa o instalador direto daqui e, ao fim,
         # oferece instalar na hora (fecha o programa e abre o instalador).
-        oferecer_atualizacao(self, self, "MHS MIDI Sequencer", info['versao'], VERSAO_APP, info['url_pagina'], info['instalador'])
+        oferecer_atualizacao(self, self, "MHS MIDI Sequencer", info['versao'], VERSAO_APP, info['url_pagina'], info['instalador'], info.get('novidades', ''))
+
+    def marcar_changelog_visto(self, versao):
+        # Chamado por instalar_e_fechar (mhs_dialogs) depois que o usuário
+        # leu as novidades na janela de atualização e o fechamento foi
+        # aceito: a tela de Changelog não repete a mesma lista quando a
+        # versão nova abrir pela primeira vez.
+        self.config["changelog_versao_mostrada"] = versao
+        try:
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump(self.config, f, indent=4, ensure_ascii=False)
+        except Exception:
+            pass
 
     def navegar_canais(self, event):
         self.foco_inteligente = None # <--- Quebra o foco especial!
