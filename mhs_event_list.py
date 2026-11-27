@@ -1131,13 +1131,23 @@ class EventListDialog(wx.Dialog):
                     else:
                         evs_target = self.display_events
                     count = 0
+                    quantiza_fim = dlg.get_note_off()
+                    if quantiza_fim:
+                        from mhs_utils import quantizar_fim_da_nota
                     for ev in evs_target:
                         if ev['type'] == 'note':
                             start_tick = ev['start']
                             closest_grid = round(start_tick / grid_ticks) * grid_ticks
                             diff = closest_grid - start_tick
                             move_ticks = int(round(diff * (forca / 100.0)))
-                            if move_ticks != 0:
+                            if quantiza_fim:
+                                # "Quantizar também o fim das notas": o fim da nota também vai para a grade
+                                novo_fim = quantizar_fim_da_nota(ev['end'], ev['start'] + move_ticks, move_ticks, grid_ticks, forca)
+                                if move_ticks != 0 or novo_fim != ev['end']:
+                                    ev['start'] += move_ticks
+                                    ev['end'] = novo_fim
+                                    count += 1
+                            elif move_ticks != 0:
                                 dur = ev['end'] - ev['start']
                                 ev['start'] += move_ticks
                                 ev['end'] = ev['start'] + dur

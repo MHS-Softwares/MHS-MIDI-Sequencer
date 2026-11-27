@@ -660,20 +660,36 @@ Alinha as notas já gravadas a uma grade rítmica. Escolha a grade (de
 Semínima a Semifusa, incluindo tercinas) e a Força em porcentagem (100% =
 alinha totalmente; valores menores fazem uma correção parcial, mais
 suave). Espaço toca um preview em tempo real de como ficaria (sem gravar
-de fato); Enter confirma e aplica.
+de fato); Enter (ou o botão OK) confirma e aplica uma vez.
+
+A caixa "Quantizar também o fim das notas (Note Off)" começa desmarcada.
+Desmarcada, só o começo das notas vai para a grade e o fim acompanha o
+começo (a duração da nota não muda). Marcada, o fim de cada nota também
+vai para a grade (na proporção da Força): as notas que terminam juntas,
+como os acordes de violão tocados com o pedal em modo de violão,
+continuam terminando no mesmo tick depois de quantizadas, em vez de se
+espalharem. Três cuidados automáticos: uma nota mais curta que meia grade
+mantém a duração (não vira nota de duração zero); o fim de uma nota que
+cai no mesmo tick do começo da mesma nota (violão repicando o acorde) é
+gravado antes, sem cortar a nota nova; e uma nota que começa dentro do
+trecho e termina fora dele não perde o começo. O mesmo vale para a
+quantização da Event List (Ctrl+Q lá dentro).
 
 ## 12.7 Quantização em Tempo Real / Gravação (Q)
 
 Ativa a quantização automática durante a gravação: marque "Gravar
 Quantizando" e escolha a grade. A partir daí, toda nota gravada já entra
-alinhada.
+alinhada. A caixa "Quantizar também o fim das notas (Note Off)" (desmarcada
+por padrão) também leva o fim de cada nota gravada para a grade, como
+descrito na seção 12.6.
 
 ## 12.8 Humanizar (H)
 
 Adiciona variação sutil e aleatória de tempo e velocidade às notas do
 trecho/canais selecionados, pra soar menos "robótico". Dois controles:
 Variação de Tempo Máxima (em milissegundos, até 500ms) e Variação de
-Velocity Máxima (até 127). O preview (Espaço) sempre toca exatamente o
+Velocity Máxima (até 127); os dois começam em 0, para manter a sua dinâmica
+gravada até você pedir variação. O preview (Espaço) sempre toca exatamente o
 mesmo resultado que será gravado ao confirmar - não é sorteado de novo a
 cada teste.
 
@@ -722,9 +738,20 @@ Quatro abas (Ctrl+Tab troca):
     As variações são sempre as mesmas para os mesmos acordes - o preview
     soa igual ao resultado que será gravado.
   - **Extensão do acorde**: clona o acorde em até 4 oitavas.
+  - **Deixar as cordas soando até a próxima palhetada (sem prender o
+    acorde)**: começa marcada. Cada corda continua soando até o instante
+    em que ela mesma é tocada de novo, como o violonista que dá uma
+    palhetada atrás da outra sem segurar as cordas entre elas. É a opção
+    para quem gravou o violão com as notas grudadas (pedal em modo de
+    violão): sem ela, todas as notas do acorde acabam juntas e a palhetada
+    seguinte volta corda por corda, deixando um vazio no meio de cada nota
+    (soa como se o acorde fosse solto antes de cada palhetada). Uma pausa
+    de verdade (silêncio maior que o de uma palhetada) continua pausa, e
+    as batidas abafadas de propósito (palm mute, chuck do pagode e do
+    reggae) continuam curtas. Desmarcada, o resultado é o de antes.
   Na palhetada (menos no Personalizado) a 1ª corda é a mais forte e as
   outras vão diminuindo, a mão acelera um pouco durante a palhetada, e a
-  palhetada para cima é mais leve. As cordas terminam junto, no fim do acorde original.
+  palhetada para cima é mais leve. Sem a opção acima, as cordas terminam junto, no fim do acorde original.
 - **Bateria (Presets)**: 147 desenhos prontos de bateria (rufos de
   caixa/prato/tom, viradas de tom, brincadeiras de hi-hat/prato,
   combinados), organizados por Categoria - escolha a categoria, Seta

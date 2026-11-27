@@ -403,6 +403,79 @@ def copiar_com_tempo(msg, tempo):
     nova.time = tempo
     return nova
 
+
+def quantizar_fim_da_nota(off_tick, on_tick_novo, deslocamento_on, grid, forca=100, inicio=0, fim=float('inf')):
+    """Tick novo do Note Off quando o usuário pede para quantizar também o fim das notas.
+
+    O fim vai para a linha da grade mais próxima (contada a partir de `inicio`), na proporção da força (100 = inteiro).
+    Assim os Note Off de notas que terminam juntas (acordes de violão com o pedal, por exemplo) continuam no MESMO tick.
+    Duas proteções: se a grade jogaria o fim para o começo da nota (nota mais curta que meia grade), a nota mantém a
+    duração e só acompanha o deslocamento do Note On (não vira nota de duração zero); e nunca passa de `fim` (fica 2 ticks
+    antes). Mesma regra do MHS Style Creator."""
+    rel = off_tick - inicio
+    alvo = inicio + round(rel / grid) * grid
+    novo = int(round(off_tick + (alvo - off_tick) * (forca / 100.0)))
+    if fim != float('inf') and novo >= fim:
+        novo = int(fim) - 2
+    if novo <= on_tick_novo:
+        novo = max(int(off_tick + deslocamento_on), int(on_tick_novo) + 1)
+    return novo
+
+
+def quantizar_midi_offline(midi_file, canais_alvo, st_tick, ed_tick, grid_ticks, forca=100, note_off=False):
+    """Quantização de precisão (Ctrl+Q): troca as trilhas de `midi_file` pelas trilhas com os Note On dos canais alvo, dentro de
+    [st_tick, ed_tick), puxados para a grade (na proporção da força). Devolve quantas notas mudaram.
+
+    note_off=False: o Note Off acompanha o deslocamento do Note On (a duração da nota não muda), como sempre foi.
+    note_off=True: o fim de cada nota também vai para a grade (ver quantizar_fim_da_nota) e os Note Off quantizados ficam
+    ANTES dos Note On do mesmo tick, para o fim de uma nota nunca cortar a mesma nota que recomeça exatamente ali.
+    Notas repetidas/sobrepostas na mesma altura entram numa fila (o Note Off fecha a mais antiga), e uma nota que começa
+    dentro do trecho e termina fora dele não perde o Note On."""
+    import mido
+    from collections import defaultdict, deque
+    mudadas = 0
+    for i, track in enumerate(midi_file.tracks):
+        abs_t, flat = 0, []
+        abertas = defaultdict(deque)
+        for msg in track:
+            abs_t += msg.time
+            ch = getattr(msg, 'channel', None)
+            if ch in canais_alvo and (st_tick <= abs_t < ed_tick):
+                if msg.type == 'note_on' and msg.velocity > 0:
+                    closest = round(abs_t / grid_ticks) * grid_ticks
+                    offset = (closest - abs_t) * (forca / 100.0)
+                    new_start = max(0, int(round(abs_t + offset)))
+                    abertas[(ch, msg.note)].append((new_start, abs_t, msg))
+                    mudadas += 1
+                elif msg.type in ('note_off', 'note_on') and abertas.get((ch, getattr(msg, 'note', None))):
+                    new_s, old_s, m_on = abertas[(ch, msg.note)].popleft()
+                    flat.append([new_s, 1, m_on])
+                    if note_off:
+                        novo = quantizar_fim_da_nota(abs_t, new_s, new_s - old_s, grid_ticks, forca)
+                        flat.append([novo, 0, msg])
+                    else:
+                        flat.append([new_s + (abs_t - old_s), 1, msg])
+                else:
+                    flat.append([abs_t, 1, msg])
+            else:
+                flat.append([abs_t, 1, msg])
+        for fila in abertas.values():          # Note On dentro do trecho cujo Note Off ficou fora dele
+            for new_s, old_s, m_on in fila:
+                flat.append([new_s, 1, m_on])
+        # o end_of_track continua sendo a última mensagem, mesmo que um Note Off quantizado caia depois dele
+        fins = [x for x in flat if x[2].type == 'end_of_track']
+        flat = [x for x in flat if x[2].type != 'end_of_track']
+        flat.sort(key=lambda x: (x[0], x[1]))
+        if fins:
+            flat.append([max(fins[-1][0], flat[-1][0] if flat else 0), 2, fins[-1][2]])
+        nova = mido.MidiTrack()
+        atual = 0
+        for t, _, m in flat:
+            nova.append(copiar_com_tempo(m, t - atual))
+            atual = t
+        midi_file.tracks[i] = nova
+    return mudadas
+
 # --- UTILITÁRIOS: CONVERSORES DE NOMES MIDI ---
 def get_nome_nota(nota_num):
     notas = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']

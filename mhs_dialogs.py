@@ -762,8 +762,8 @@ class QuantizacaoOfflineDialog(wx.Dialog):
     def get_resolucao(self):
         return self.resolucoes[self.combo_res.GetSelection()][1]
 class QuantizacaoRealTimeDialog(wx.Dialog):
-    def __init__(self, parent, enabled_atual, res_atual):
-        super().__init__(parent, title="Quantização em Tempo Real (Input)", size=(380, 200))
+    def __init__(self, parent, enabled_atual, res_atual, note_off_atual=False):
+        super().__init__(parent, title="Quantização em Tempo Real (Input)", size=(380, 250))
         sizer = wx.BoxSizer(wx.VERTICAL)
         
         self.resolucoes = [
@@ -788,7 +788,11 @@ class QuantizacaoRealTimeDialog(wx.Dialog):
                 break
         self.combo_res.SetSelection(idx)
         sizer.Add(self.combo_res, 0, wx.EXPAND | wx.ALL, 5)
-        
+
+        self.chk_note_off = wx.CheckBox(self, label="Quantizar também o fim das notas (Note Off)")
+        self.chk_note_off.SetValue(bool(note_off_atual))
+        sizer.Add(self.chk_note_off, 0, wx.ALL, 10)
+
         btns = self.CreateButtonSizer(wx.OK | wx.CANCEL)
         sizer.Add(btns, 0, wx.ALIGN_RIGHT | wx.ALL, 10)
         self.SetSizer(sizer)
@@ -797,6 +801,9 @@ class QuantizacaoRealTimeDialog(wx.Dialog):
 
     def get_valores(self):
         return self.chk_enable.GetValue(), self.resolucoes[self.combo_res.GetSelection()][1]
+
+    def get_note_off(self):
+        return self.chk_note_off.GetValue()
 class HumanizarDialog(wx.Dialog):
     def __init__(self, parent):
         super().__init__(parent, title="Humanizar (Variação Aleatória em Tempo Real)", size=(400, 250))
@@ -806,13 +813,13 @@ class HumanizarDialog(wx.Dialog):
 
         sz_time = wx.BoxSizer(wx.HORIZONTAL)
         sz_time.Add(wx.StaticText(self, label="Variação de Tempo Máxima (ms):"), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
-        self.sp_time = wx.SpinCtrl(self, value="5", min=0, max=500)
+        self.sp_time = wx.SpinCtrl(self, value="0", min=0, max=500)
         sz_time.Add(self.sp_time, 1, wx.EXPAND | wx.ALL, 5)
         sizer.Add(sz_time, 0, wx.EXPAND | wx.ALL, 5)
 
         sz_vel = wx.BoxSizer(wx.HORIZONTAL)
         sz_vel.Add(wx.StaticText(self, label="Variação de Velocity Máxima (+/-):"), 0, wx.ALIGN_CENTER_VERTICAL | wx.ALL, 5)
-        self.sp_vel = wx.SpinCtrl(self, value="8", min=0, max=127)
+        self.sp_vel = wx.SpinCtrl(self, value="0", min=0, max=127)
         sz_vel.Add(self.sp_vel, 1, wx.EXPAND | wx.ALL, 5)
         sizer.Add(sz_vel, 0, wx.EXPAND | wx.ALL, 5)
 
@@ -3287,8 +3294,8 @@ class PreciseTempoDialog(wx.Dialog):
             return self.bpm
 
 class QuantizeProDialog(wx.Dialog):
-    def __init__(self, parent):
-        super().__init__(parent, title="Quantização de Precisão", size=(400, 250))
+    def __init__(self, parent, note_off_atual=False):
+        super().__init__(parent, title="Quantização de Precisão", size=(400, 300))
         self.parent = parent
         
         sizer = wx.BoxSizer(wx.VERTICAL)
@@ -3313,7 +3320,11 @@ class QuantizeProDialog(wx.Dialog):
         sizer.Add(wx.StaticText(self, label="Força (%):"), 0, wx.ALL, 5)
         self.sp_forca = wx.SpinCtrl(self, value="100", min=1, max=100)
         sizer.Add(self.sp_forca, 0, wx.EXPAND | wx.ALL, 5)
-        
+
+        self.chk_note_off = wx.CheckBox(self, label="Quantizar também o fim das notas (Note Off)")
+        self.chk_note_off.SetValue(bool(note_off_atual))
+        sizer.Add(self.chk_note_off, 0, wx.ALL, 8)
+
         self.lbl_preview = wx.StaticText(self, label="ESPAÇO: Ouvir/Parar Preview", style=wx.ALIGN_CENTER)
         sizer.Add(self.lbl_preview, 0, wx.ALL | wx.EXPAND, 10)
         
@@ -3332,62 +3343,22 @@ class QuantizeProDialog(wx.Dialog):
         grid_ticks = int(round(base_grid * (tpb / 480.0)))
         return grid_ticks, self.sp_forca.GetValue()
 
+    def get_note_off(self):
+        return self.chk_note_off.GetValue()
+
     def on_key(self, event):
         code = event.GetKeyCode()
         
-        # --- A CORREÇÃO: O Enter (OK) agora processa e salva a quantização de verdade! ---
+        # Enter = OK. Quem abriu esta janela (a Quantização de Precisão do Sequencer, o Ctrl+Q da Event List) é quem
+        # quantiza de verdade quando recebe wx.ID_OK; antes o Enter quantizava aqui e o chamador quantizava DE NOVO logo
+        # depois (com Força abaixo de 100 a nota andava duas vezes, e na Event List a quantização ainda mexia no arquivo todo).
         if code in [wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER]:
-            grid_ticks, forca = self.get_values()
-            
-            # Puxa as referências do Sequencer
-            seq = self.parent.parent if hasattr(self.parent, 'display_events') else self.parent
-            seq.save_state("Quantização Offline")
-            
-            t_start, t_end = seq.get_selection_bounds()
-            st_tick = seq.get_tick_at_sec(t_start) if t_start != float('inf') else 0
-            ed_tick = seq.get_tick_at_sec(t_end) if t_end != float('inf') else float('inf')
-            canais_alvo = getattr(seq, 'canais_selecionados', {seq.canal_atual})
-            
-            import mido
-            notas_mudadas = 0
-            for i, track in enumerate(seq.midi_file.tracks):
-                abs_t, active, flat = 0, {}, []
-                for msg in track:
-                    abs_t += msg.time
-                    ch = getattr(msg, 'channel', None)
-                    if ch in canais_alvo and (st_tick <= abs_t < ed_tick):
-                        if msg.type == 'note_on' and msg.velocity > 0:
-                            closest = round(abs_t / grid_ticks) * grid_ticks
-                            offset = (closest - abs_t) * (forca / 100.0)
-                            new_start = max(0, int(round(abs_t + offset)))
-                            active[(ch, msg.note)] = (new_start, abs_t, msg)
-                            notas_mudadas += 1
-                        elif msg.type in ['note_off', 'note_on'] and (ch, getattr(msg, 'note', None)) in active:
-                            new_s, old_s, m_on = active.pop((ch, msg.note))
-                            flat.append([new_s, m_on])
-                            flat.append([new_s + (abs_t - old_s), msg])
-                        else: flat.append([abs_t, msg])
-                    else: flat.append([abs_t, msg])
-                
-                flat.sort(key=lambda x: x[0])
-                new_track = mido.MidiTrack()
-                curr = 0
-                for t, m in flat:
-                    new_track.append(m.copy(time=t - curr))
-                    curr = t
-                seq.midi_file.tracks[i] = new_track
-
-            seq.dirty = True
-            seq.ler_midi_memoria(reset_canais=False)
-            
             if hasattr(self.parent, 'preview_is_playing'): self.parent.preview_is_playing = False
+            seq = self.parent.parent if hasattr(self.parent, 'display_events') else self.parent
             if hasattr(seq, 'all_notes_off'): seq.all_notes_off()
-            
-            from mhs_utils import falar_status
-            falar_status(f"{notas_mudadas} notas quantizadas com sucesso.", imediato=True)
             self.EndModal(wx.ID_OK)
             return
-            
+
         if code in [wx.WXK_SPACE, 32]:
             if getattr(self.parent, 'preview_is_playing', False):
                 self.parent.preview_is_playing = False
@@ -5525,6 +5496,12 @@ class MidiEffectsDialog(wx.Dialog):
         self.sp_harp_oct = wx.SpinCtrl(self.tab_harp, value="1", min=1, max=4)
         sz_harp.Add(self.sp_harp_oct, 0, wx.EXPAND | wx.ALL, 5)
 
+        # Violão sem prender as cordas: cada corda soa até o instante em que ela mesma é tocada de novo (ver mhs_violao.
+        # _soar_ate_a_proxima). Desmarcado, o acorde termina inteiro antes de cada palhetada, como era antes.
+        self.chk_harp_soar = wx.CheckBox(self.tab_harp, label="Deixar as cordas soando até a próxima palhetada (sem prender o acorde)")
+        self.chk_harp_soar.SetValue(True)
+        sz_harp.Add(self.chk_harp_soar, 0, wx.ALL, 8)
+
         self.tab_harp.SetSizer(sz_harp)
         self._popular_lista_harpa()
 
@@ -5581,6 +5558,7 @@ class MidiEffectsDialog(wx.Dialog):
         self.cb_harp_grid.Bind(wx.EVT_COMBOBOX, self.on_change)
         self.sp_harp_nat.Bind(wx.EVT_SPINCTRL, self.on_change)
         self.sp_harp_oct.Bind(wx.EVT_SPINCTRL, self.on_change)
+        self.chk_harp_soar.Bind(wx.EVT_CHECKBOX, self.on_change)
 
         self.cb_bat_cat.Bind(wx.EVT_COMBOBOX, self.on_bat_categoria_change)
         self.list_bat.Bind(wx.EVT_LISTBOX, self.on_bat_preset_change)
@@ -5754,6 +5732,7 @@ class MidiEffectsDialog(wx.Dialog):
             params['grade_ticks'] = self.grids[self.cb_harp_grid.GetSelection()][1] if vel == "grade" else 0
             params['naturalidade'] = self.sp_harp_nat.GetValue()
             params['octaves'] = self.sp_harp_oct.GetValue()
+            params['soar'] = self.chk_harp_soar.GetValue()
         else:
             tipo = "bateria_preset"
             sel = self.list_bat.GetSelection()

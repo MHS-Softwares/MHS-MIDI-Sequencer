@@ -32,7 +32,7 @@ from mhs_event_list import EventListDialog
 
 # Número da versão do app - um lugar só pra atualizar a cada release (título
 # da janela e a checagem de atualizações). Mesmo padrão do MHS Style Creator.
-VERSAO_APP = "5.2"
+VERSAO_APP = "5.3"
 
 # Nome do repositório no GitHub (github.com/MHS-Softwares/<REPO_GITHUB>) -
 # usado por verificar_atualizacoes_ao_iniciar / PreferenciasDialog pra
@@ -63,6 +63,12 @@ MENSAGEM_APOIO = (
 )
 
 CHANGELOG_TEXTS = {
+    "5.3": (
+        "- Quantização (Q, Ctrl+Q e Ctrl+Q da Event List): nova caixa \"Quantizar também o fim das notas (Note Off)\", desmarcada por padrão. Marcada, o fim de cada nota também vai para a grade, e as notas que terminam juntas, como os acordes de violão tocados com o pedal, continuam grudadinhas depois de quantizadas. Uma nota mais curta que meia grade mantém a duração, e o fim nunca corta a nota que recomeça no mesmo tick.\n"
+        "- Efeitos Midi (Ctrl+K), aba Harpa / Strum: nova opção \"Deixar as cordas soando até a próxima palhetada (sem prender o acorde)\", marcada por padrão. Antes todas as notas do acorde acabavam juntas e a palhetada seguinte voltava corda por corda, com um vazio no meio. Agora cada corda soa até ser tocada de novo, como o violonista que não segura as cordas entre as palhetadas. Pausas de verdade e batidas abafadas de propósito (palm mute, chuck) continuam como eram.\n"
+        "- Humanizar (H): a variação de tempo e a de velocity agora começam em 0, para manter a sua dinâmica gravada.\n"
+        "- Corrigido na Quantização de Precisão: o Enter quantizava na própria janela e o programa quantizava de novo logo depois (com Força abaixo de 100 a nota andava duas vezes, e na Event List a quantização ainda mexia no arquivo todo). Agora o Enter confirma e quantiza uma vez só. Também não se perde mais o começo de uma nota repetida na mesma altura nem o de uma nota que atravessa o fim do trecho selecionado."
+    ),
     "5.2": (
         "- Atualização do programa mais simples: a janela \"Atualização disponível\" agora mostra as novidades da versão nova num campo só de leitura (o foco começa nele; leia com as setas e use Tab para chegar aos botões). Ao escolher \"Baixar e instalar\", o programa baixa, confere o arquivo, pergunta se quer salvar o que estiver aberto, fecha, instala a versão nova sozinho, sem as telas do instalador e sem perguntar a pasta, e abre a versão nova em primeiro plano. Se algo der errado na instalação aparece uma caixa de mensagem com o motivo. Como você já leu as novidades na janela, a tela de Changelog não repete a mesma lista quando a versão nova abrir. (Novidades na janela e instalação logo após o download: contribuição de Gabriel Schuck; instalador silencioso: MHS Gerenciador Python.)"
     ),
@@ -738,6 +744,8 @@ class MidiSequencer(wx.Frame):
         self.gravando = False
         self.rt_quantize = False
         self.rt_quantize_res = 16.0
+        self.rt_quantize_note_off = False        # Q: quantiza também o fim das notas (desmarcado por padrão)
+        self.quantize_note_off_offline = False   # Ctrl+Q: idem (lembra a última escolha da sessão)
         
         self.play_events = []
         self.beat_events = [] 
@@ -4803,13 +4811,19 @@ class MidiSequencer(wx.Frame):
                     key = (ch, msg.note)
                     if key not in active_notes:
                         active_notes[key] = []
-                    active_notes[key].append(offset)
+                    active_notes[key].append((offset, snapped))
                     
                 elif msg.type == 'note_off' or (msg.type == 'note_on' and msg.velocity == 0):
                     key = (ch, getattr(msg, 'note', None))
                     if key in active_notes and len(active_notes[key]) > 0:
-                        offset = active_notes[key].pop(0)
-                        item[0] = int(max(0, tick + offset))
+                        offset, on_novo = active_notes[key].pop(0)
+                        if getattr(self, 'rt_quantize_note_off', False):
+                            # "Quantizar também o fim das notas": o Note Off vai para a grade (acordes que terminam juntos
+                            # continuam terminando no mesmo tick); no desempate do tick o Note Off já vem antes do Note On.
+                            from mhs_utils import quantizar_fim_da_nota
+                            item[0] = quantizar_fim_da_nota(tick, on_novo, offset, grid_ticks)
+                        else:
+                            item[0] = int(max(0, tick + offset))
                         if len(active_notes[key]) == 0:
                             del active_notes[key]
 
@@ -5520,44 +5534,19 @@ class MidiSequencer(wx.Frame):
 
         self.preview_is_playing = False
         from mhs_dialogs import QuantizeProDialog
-        dlg = QuantizeProDialog(self)
+        dlg = QuantizeProDialog(self, note_off_atual=self.quantize_note_off_offline)
         if dlg.ShowModal() == wx.ID_OK:
             grid_ticks, forca = dlg.get_values()
             self.save_state("Quantização de Precisão")
             
+            # sem trecho marcado o fim e infinito (get_selection_bounds devolve inf): vale o arquivo todo
             t_start, t_end = self.get_selection_bounds()
-            st_tick = self.get_tick_at_sec(t_start)
-            ed_tick = self.get_tick_at_sec(t_end)
+            st_tick = self.get_tick_at_sec(t_start) if t_start != float('inf') else 0
+            ed_tick = self.get_tick_at_sec(t_end) if t_end != float('inf') else float('inf')
             canais_alvo = getattr(self, 'canais_selecionados', {self.canal_atual})
-            
-            import mido
-            notas_mudadas = 0
-            for i, track in enumerate(self.midi_file.tracks):
-                abs_t, active, flat = 0, {}, []
-                for msg in track:
-                    abs_t += msg.time
-                    ch = getattr(msg, 'channel', None)
-                    if ch in canais_alvo and (st_tick <= abs_t < ed_tick):
-                        if msg.type == 'note_on' and msg.velocity > 0:
-                            closest = round(abs_t / grid_ticks) * grid_ticks
-                            offset = (closest - abs_t) * (forca / 100.0)
-                            new_start = max(0, int(round(abs_t + offset)))
-                            active[(ch, msg.note)] = (new_start, abs_t, msg)
-                            notas_mudadas += 1
-                        elif msg.type in ['note_off', 'note_on'] and (ch, getattr(msg, 'note', None)) in active:
-                            new_s, old_s, m_on = active.pop((ch, msg.note))
-                            flat.append([new_s, m_on])
-                            flat.append([new_s + (abs_t - old_s), msg])
-                        else: flat.append([abs_t, msg])
-                    else: flat.append([abs_t, msg])
-                
-                flat.sort(key=lambda x: x[0])
-                new_track = mido.MidiTrack()
-                curr = 0
-                for t, m in flat:
-                    new_track.append(copiar_com_tempo(m, t - curr))
-                    curr = t
-                self.midi_file.tracks[i] = new_track
+            from mhs_utils import quantizar_midi_offline
+            notas_mudadas = quantizar_midi_offline(self.midi_file, canais_alvo, st_tick, ed_tick, grid_ticks, forca, dlg.get_note_off())
+            self.quantize_note_off_offline = dlg.get_note_off()
 
             self.dirty = True
             self.ler_midi_memoria(reset_canais=False)
@@ -5703,9 +5692,10 @@ class MidiSequencer(wx.Frame):
     def abrir_quantizacao_realtime(self, event):
         from mhs_utils import falar_status
         from mhs_dialogs import QuantizacaoRealTimeDialog
-        dlg = QuantizacaoRealTimeDialog(self, self.rt_quantize, self.rt_quantize_res)
+        dlg = QuantizacaoRealTimeDialog(self, self.rt_quantize, self.rt_quantize_res, self.rt_quantize_note_off)
         if dlg.ShowModal() == wx.ID_OK:
             self.rt_quantize, self.rt_quantize_res = dlg.get_valores()
+            self.rt_quantize_note_off = dlg.get_note_off()
             status_str = "Ligada" if self.rt_quantize else "Desligada"
             falar_status(f"Quantização em gravação {status_str}.")
             
